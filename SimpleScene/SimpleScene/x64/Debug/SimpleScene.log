@@ -1,2 +1,4 @@
 ﻿  main.cpp
-  SimpleScene.vcxproj -> D:\code\OpenGL\Project\hw1\SJTU_SE_CG\SimpleScene\x64\Debug\SimpleScene.exe
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(139,27): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(295,51): warning C4305: “参数”: 从“double”到“float”截断
+  SimpleScene.vcxproj -> D:\code\OpenGL\Project\Homework1\SimpleScene\x64\Debug\SimpleScene.exe
