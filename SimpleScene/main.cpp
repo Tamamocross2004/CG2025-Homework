@@ -480,7 +480,7 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
             startAngle = 0.0f; // 从 0 度画到 -180 度
         }
 
-        for (int i = 0; i < patternSegments+1; ++i) {
+        for (int i = -1; i < patternSegments+1; ++i) {
             // 顺时针画半圈
             float angle1 = startAngle - (static_cast<float>(i) / patternSegments) * static_cast<float>(M_PI);
             float angle2 = startAngle - (static_cast<float>(i + 1) / patternSegments) * static_cast<float>(M_PI);
@@ -516,30 +516,251 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
             vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
         }
     }
-    // 4.生成中部八边形
-    // 水平条
-    vertices.push_back(-0.33f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.33f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.33f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    // 4.生成中部八边形 和四个正方形
+    // 两条水平条 + 两个正方形
+    // 上
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
 
-    vertices.push_back(-0.33f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.33f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.33f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
 
-    vertices.push_back(-0.33f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.33f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.33f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
 
-    vertices.push_back(-0.33f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.33f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.33f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    // 垂直条
-    // vertices.push_back(-0.33f * barWidth); vertices.push_back( 0.33f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    // vertices.push_back( 0.33f * barWidth); vertices.push_back( 0.33f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    // vertices.push_back( 0.33f * barWidth); vertices.push_back(-0.33f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    // 下
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
 
-    // vertices.push_back(-0.33f * barWidth); vertices.push_back( 0.33f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    // vertices.push_back( 0.33f * barWidth); vertices.push_back(-0.33f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    // vertices.push_back(-0.33f * barWidth); vertices.push_back(-0.33f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    
+    // 两条垂直条 + 两个正方形
+    // 右
+    vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+
+    vertices.push_back(0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+
+    vertices.push_back(0.4f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    vertices.push_back(0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    // 左
+    vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+ 
+    vertices.push_back(-0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+
+    vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    vertices.push_back(-0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    // 四条斜边
+    // 右上
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+
+    // 左上
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    // 左下
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+
+    // 右下
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+
+    // 在每个画出的正方形中心画一横一竖的直线
+    // 上
+    vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+
+    // 下
+    vertices.push_back(-0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back( 0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    // 左
+    vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+
+    // 右
+    vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    // 从每条斜线的中点开始, 向外引一条直线
+    // 上
+    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    // 下
+    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    // 右
+    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.96f * innerRadius); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.96f * innerRadius); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.96f * innerRadius); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+
+    // 左
+    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    
+    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    vertices.push_back(-0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+
+
     return vertices;
 }
