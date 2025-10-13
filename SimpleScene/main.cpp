@@ -21,6 +21,7 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
 std::vector<float> generateCircularWindowVertices(int segments, float outerRadius, float innerRadius, float barWidth);
+std::vector<float> generateWallWithHoleVertices(float width, float height, float holeRadius, int segments);
 
 // 窗口设置
 const unsigned int SCR_WIDTH = 1600;
@@ -135,8 +136,14 @@ int main()
 
     // --- 生成圆形窗户的顶点数据 ---
     // ------------------------------------------------------------------
-    std::vector<float> circularWindowVertices = generateCircularWindowVertices(72, 1.2f, 1.1f, 0.05f);
+    float windowOuterRadius = 1.2f;
+    float windowScale = 1.2f;
+    std::vector<float> circularWindowVertices = generateCircularWindowVertices(72, windowOuterRadius, 1.1f, 0.05f);
     int windowVertexCount = circularWindowVertices.size() / 6;
+
+    // --- 生成带洞后墙的顶点数据 ---
+    std::vector<float> wallWithHoleVertices = generateWallWithHoleVertices(8.0f, 6.0f, windowOuterRadius * windowScale, 72);
+    int wallWithHoleVertexCount = wallWithHoleVertices.size() / 6;
 
     // 房间墙壁、地板、天花板的VAO/VBO
     // ------------------------------------------------------------------
@@ -178,6 +185,18 @@ int main()
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     
+    // 带洞后墙的VAO/VBO
+    // ------------------------------------------------------------------
+    unsigned int wallVAO, wallVBO;
+    glGenVertexArrays(1, &wallVAO);
+    glGenBuffers(1, &wallVBO);
+    glBindVertexArray(wallVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, wallVBO);
+    glBufferData(GL_ARRAY_BUFFER, wallWithHoleVertices.size() * sizeof(float), wallWithHoleVertices.data(), GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 
     // 渲染循环
     // -----------
@@ -274,7 +293,21 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // 绘制后墙
+        // // 绘制后墙
+        // {
+        //     //设置光照参数
+        //     lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
+
+        //     // 世界坐标变换
+        //     model = glm::mat4(1.0f);
+        //     model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f));
+        //     model = glm::scale(model, glm::vec3(8.0f, 6.0f, 0.1f));
+        //     lightingShader.setMat4("model", model);
+
+        //     // 渲染
+        //     glDrawArrays(GL_TRIANGLES, 0, 36);
+        // }
+        // 绘制带洞的后墙
         {
             //设置光照参数
             lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
@@ -282,11 +315,12 @@ int main()
             // 世界坐标变换
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f));
-            model = glm::scale(model, glm::vec3(8.0f, 6.0f, 0.1f));
+            // 注意：这里不再需要 scale，因为顶点数据已经定义了正确的尺寸
             lightingShader.setMat4("model", model);
 
-            // 渲染
-            glDrawArrays(GL_TRIANGLES, 0, 36);
+            // 渲染带洞的墙
+            glBindVertexArray(wallVAO);
+            glDrawArrays(GL_TRIANGLES, 0, wallWithHoleVertexCount);
         }
 
         // 绘制窗户
@@ -296,7 +330,7 @@ int main()
 
             // 世界坐标变换
             model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, 0.0f, -3.9f)); // 放置在后墙前一点
+            model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f)); // 放置在后墙前一点
             model = glm::scale(model, glm::vec3(1.2f));
             lightingShader.setMat4("model", model);
             glBindVertexArray(windowVAO);
@@ -329,8 +363,10 @@ int main()
     glDeleteVertexArrays(1, &roomVAO);
     glDeleteVertexArrays(1, &lightCubeVAO);
     glDeleteVertexArrays(1, &windowVAO);
+    glDeleteVertexArrays(1, &wallVAO);
     glDeleteBuffers(1, &roomVBO);
     glDeleteBuffers(1, &windowVBO);
+    glDeleteBuffers(1, &wallVBO);
 
     // glfw：终止，清除所有以前分配的 GLFW 资源。
     // ------------------------------------------------------------------
@@ -761,6 +797,58 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
     vertices.push_back(-0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
     vertices.push_back(-0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
 
+
+    return vertices;
+}
+
+// 生成带圆形孔洞的墙壁顶点
+std::vector<float> generateWallWithHoleVertices(float width, float height, float holeRadius, int segments)
+{
+    std::vector<float> vertices;
+    const float twoPI = 2.0f * static_cast<float>(M_PI);
+    float halfW = width / 2.0f;
+    float halfH = height / 2.0f;
+
+    for (int i = 0; i < segments; ++i)
+    {
+        float angle1 = twoPI * static_cast<float>(i) / static_cast<float>(segments);
+        float angle2 = twoPI * static_cast<float>(i + 1) / static_cast<float>(segments);
+
+        // 内圈顶点 (洞口边缘)
+        glm::vec3 inner1(holeRadius * cosf(angle1), holeRadius * sinf(angle1), 0.0f);
+        glm::vec3 inner2(holeRadius * cosf(angle2), holeRadius * sinf(angle2), 0.0f);
+
+        // 外圈顶点 (墙壁边缘)
+        // 使用一个足够大的外接矩形来确定外顶点，然后将其裁剪到墙的实际边界
+        float outer_x1 = std::max(-halfW, std::min(halfW, inner1.x * 100)); // 乘以大数以投射到边缘
+        float outer_y1 = std::max(-halfH, std::min(halfH, inner1.y * 100));
+        // 如果点在墙角，确保它精确地在角上
+        if (abs(outer_x1) == halfW && abs(outer_y1) > 0) outer_y1 = (inner1.y > 0) ? halfH : -halfH;
+        if (abs(outer_y1) == halfH && abs(outer_x1) > 0) outer_x1 = (inner1.x > 0) ? halfW : -halfW;
+        
+        float outer_x2 = std::max(-halfW, std::min(halfW, inner2.x * 100));
+        float outer_y2 = std::max(-halfH, std::min(halfH, inner2.y * 100));
+        if (abs(outer_x2) == halfW && abs(outer_y2) > 0) outer_y2 = (inner2.y > 0) ? halfH : -halfH;
+        if (abs(outer_y2) == halfH && abs(outer_x2) > 0) outer_x2 = (inner2.x > 0) ? halfW : -halfW;
+
+
+        glm::vec3 outer1(outer_x1, outer_y1, 0.0f);
+        glm::vec3 outer2(outer_x2, outer_y2, 0.0f);
+        
+        // 法线，对于后墙，朝向正Z轴
+        glm::vec3 normal(0.0f, 0.0f, 1.0f);
+
+        // 用两个三角形构成一个梯形
+        // 三角形 1
+        vertices.insert(vertices.end(), {inner1.x, inner1.y, inner1.z, normal.x, normal.y, normal.z});
+        vertices.insert(vertices.end(), {outer1.x, outer1.y, outer1.z, normal.x, normal.y, normal.z});
+        vertices.insert(vertices.end(), {outer2.x, outer2.y, outer2.z, normal.x, normal.y, normal.z});
+
+        // 三角形 2
+        vertices.insert(vertices.end(), {inner1.x, inner1.y, inner1.z, normal.x, normal.y, normal.z});
+        vertices.insert(vertices.end(), {outer2.x, outer2.y, outer2.z, normal.x, normal.y, normal.z});
+        vertices.insert(vertices.end(), {inner2.x, inner2.y, inner2.z, normal.x, normal.y, normal.z});
+    }
 
     return vertices;
 }
