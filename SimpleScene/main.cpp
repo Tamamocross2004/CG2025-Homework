@@ -22,7 +22,9 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
-std::vector<float> generateCircularWindowVertices(int segments, float outerRadius, float innerRadius, float barWidth);
+// 生成中式镂空窗
+std::vector<float> generateCircularWindowVertices(int segments, float outerRadius, float innerRadius, float barWidth, float depth);
+// 生成带洞墙体
 std::vector<float> generateWallWithHoleVertices(float width, float height, float holeRadius, int segments);
 
 // 窗口设置
@@ -146,7 +148,8 @@ int main()
     // ------------------------------------------------------------------
     float windowOuterRadius = 1.2f;
     float windowScale = 1.2f;
-    std::vector<float> circularWindowVertices = generateCircularWindowVertices(72, windowOuterRadius, 1.1f, 0.05f);
+    // std::vector<float> circularWindowVertices = generateCircularWindowVertices(72, windowOuterRadius, 1.1f, 0.05f);
+    std::vector<float> circularWindowVertices = generateCircularWindowVertices(72, windowOuterRadius, 1.1f, 0.05f, 0.1f);    
     int windowVertexCount = circularWindowVertices.size() / 6;
 
     // --- 生成带洞后墙的顶点数据 ---
@@ -323,6 +326,7 @@ int main()
         //     // 渲染
         //     glDrawArrays(GL_TRIANGLES, 0, 36);
         // }
+        
         // 绘制带洞的后墙
         {
             //设置光照参数
@@ -393,11 +397,9 @@ int main()
         {
             // modelShader 已经被激活，且 view/projection/light 等 uniform 已设置
             // 我们只需要为台灯设置一个新的 model 矩阵
-
-            modelShader.use(); // 使用光源立方体的着色器来渲染台灯
-
+            modelShader.use(); 
             model = glm::mat4(1.0f);
-            // 将台灯放在书桌表面上，稍微偏左的位置
+            // 将台灯放在书桌表面上偏左的位置
             model = glm::translate(model, glm::vec3(-1.0f, -0.8f, -3.0f)); 
             model = glm::scale(model, glm::vec3(0.3f)); // 缩放台灯使其尺寸合适
             modelShader.setMat4("model", model);
@@ -483,373 +485,189 @@ void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 }
 
 // 将生成圆形窗户顶点的逻辑封装成一个独立的函数
-std::vector<float> generateCircularWindowVertices(int segments, float outerRadius, float innerRadius, float barWidth)
+std::vector<float> generateCircularWindowVertices(int segments, float outerRadius, float innerRadius, float barWidth, float depth)
 {
     std::vector<float> vertices;
     const float twoPI = 2.0f * static_cast<float>(M_PI);
+    float halfDepth = depth / 2.0f;
+
+    // 辅助函数，用于添加一个完整的3D条带片段 (用于曲线)
+    auto add3DStrip = [&](glm::vec2 p1_inner, glm::vec2 p1_outer, glm::vec2 p2_inner, glm::vec2 p2_outer) {
+        // Front face
+        vertices.insert(vertices.end(), { p1_outer.x, p1_outer.y, halfDepth, 0, 0, 1 });
+        vertices.insert(vertices.end(), { p1_inner.x, p1_inner.y, halfDepth, 0, 0, 1 });
+        vertices.insert(vertices.end(), { p2_inner.x, p2_inner.y, halfDepth, 0, 0, 1 });
+        vertices.insert(vertices.end(), { p1_outer.x, p1_outer.y, halfDepth, 0, 0, 1 });
+        vertices.insert(vertices.end(), { p2_inner.x, p2_inner.y, halfDepth, 0, 0, 1 });
+        vertices.insert(vertices.end(), { p2_outer.x, p2_outer.y, halfDepth, 0, 0, 1 });
+
+        // Back face (flipped winding order)
+        vertices.insert(vertices.end(), { p1_outer.x, p1_outer.y, -halfDepth, 0, 0, -1 });
+        vertices.insert(vertices.end(), { p2_inner.x, p2_inner.y, -halfDepth, 0, 0, -1 });
+        vertices.insert(vertices.end(), { p1_inner.x, p1_inner.y, -halfDepth, 0, 0, -1 });
+        vertices.insert(vertices.end(), { p1_outer.x, p1_outer.y, -halfDepth, 0, 0, -1 });
+        vertices.insert(vertices.end(), { p2_outer.x, p2_outer.y, -halfDepth, 0, 0, -1 });
+        vertices.insert(vertices.end(), { p2_inner.x, p2_inner.y, -halfDepth, 0, 0, -1 });
+
+        // Outer side
+        glm::vec3 outer_normal = glm::normalize(glm::vec3(p1_outer.x + p2_outer.x, p1_outer.y + p2_outer.y, 0));
+        vertices.insert(vertices.end(), { p1_outer.x, p1_outer.y, halfDepth, outer_normal.x, outer_normal.y, 0 });
+        vertices.insert(vertices.end(), { p1_outer.x, p1_outer.y, -halfDepth, outer_normal.x, outer_normal.y, 0 });
+        vertices.insert(vertices.end(), { p2_outer.x, p2_outer.y, -halfDepth, outer_normal.x, outer_normal.y, 0 });
+        vertices.insert(vertices.end(), { p1_outer.x, p1_outer.y, halfDepth, outer_normal.x, outer_normal.y, 0 });
+        vertices.insert(vertices.end(), { p2_outer.x, p2_outer.y, -halfDepth, outer_normal.x, outer_normal.y, 0 });
+        vertices.insert(vertices.end(), { p2_outer.x, p2_outer.y, halfDepth, outer_normal.x, outer_normal.y, 0 });
+
+        // Inner side
+        glm::vec3 inner_normal = -glm::normalize(glm::vec3(p1_inner.x + p2_inner.x, p1_inner.y + p2_inner.y, 0));
+        vertices.insert(vertices.end(), { p1_inner.x, p1_inner.y, halfDepth, inner_normal.x, inner_normal.y, 0 });
+        vertices.insert(vertices.end(), { p2_inner.x, p2_inner.y, -halfDepth, inner_normal.x, inner_normal.y, 0 });
+        vertices.insert(vertices.end(), { p1_inner.x, p1_inner.y, -halfDepth, inner_normal.x, inner_normal.y, 0 });
+        vertices.insert(vertices.end(), { p1_inner.x, p1_inner.y, halfDepth, inner_normal.x, inner_normal.y, 0 });
+        vertices.insert(vertices.end(), { p2_inner.x, p2_inner.y, halfDepth, inner_normal.x, inner_normal.y, 0 });
+        vertices.insert(vertices.end(), { p2_inner.x, p2_inner.y, -halfDepth, inner_normal.x, inner_normal.y, 0 });
+    };
+    
+    // 辅助函数，用于添加一个完整的3D矩形 (用于直线)
+    auto add3DRect = [&](float x1, float y1, float x2, float y2) {
+        // Front
+        vertices.insert(vertices.end(), { x1, y1, halfDepth, 0, 0, 1 });
+        vertices.insert(vertices.end(), { x2, y1, halfDepth, 0, 0, 1 });
+        vertices.insert(vertices.end(), { x2, y2, halfDepth, 0, 0, 1 });
+        vertices.insert(vertices.end(), { x1, y1, halfDepth, 0, 0, 1 });
+        vertices.insert(vertices.end(), { x2, y2, halfDepth, 0, 0, 1 });
+        vertices.insert(vertices.end(), { x1, y2, halfDepth, 0, 0, 1 });
+        // Back
+        vertices.insert(vertices.end(), { x1, y1, -halfDepth, 0, 0, -1 });
+        vertices.insert(vertices.end(), { x2, y2, -halfDepth, 0, 0, -1 });
+        vertices.insert(vertices.end(), { x2, y1, -halfDepth, 0, 0, -1 });
+        vertices.insert(vertices.end(), { x1, y1, -halfDepth, 0, 0, -1 });
+        vertices.insert(vertices.end(), { x1, y2, -halfDepth, 0, 0, -1 });
+        vertices.insert(vertices.end(), { x2, y2, -halfDepth, 0, 0, -1 });
+        // Top
+        vertices.insert(vertices.end(), { x1, y2, halfDepth, 0, 1, 0 });
+        vertices.insert(vertices.end(), { x2, y2, halfDepth, 0, 1, 0 });
+        vertices.insert(vertices.end(), { x2, y2, -halfDepth, 0, 1, 0 });
+        vertices.insert(vertices.end(), { x1, y2, halfDepth, 0, 1, 0 });
+        vertices.insert(vertices.end(), { x2, y2, -halfDepth, 0, 1, 0 });
+        vertices.insert(vertices.end(), { x1, y2, -halfDepth, 0, 1, 0 });
+        // Bottom
+        vertices.insert(vertices.end(), { x1, y1, halfDepth, 0, -1, 0 });
+        vertices.insert(vertices.end(), { x2, y1, -halfDepth, 0, -1, 0 });
+        vertices.insert(vertices.end(), { x2, y1, halfDepth, 0, -1, 0 });
+        vertices.insert(vertices.end(), { x1, y1, halfDepth, 0, -1, 0 });
+        vertices.insert(vertices.end(), { x1, y1, -halfDepth, 0, -1, 0 });
+        vertices.insert(vertices.end(), { x2, y1, -halfDepth, 0, -1, 0 });
+        // Left
+        vertices.insert(vertices.end(), { x1, y1, halfDepth, -1, 0, 0 });
+        vertices.insert(vertices.end(), { x1, y2, -halfDepth, -1, 0, 0 });
+        vertices.insert(vertices.end(), { x1, y1, -halfDepth, -1, 0, 0 });
+        vertices.insert(vertices.end(), { x1, y1, halfDepth, -1, 0, 0 });
+        vertices.insert(vertices.end(), { x1, y2, halfDepth, -1, 0, 0 });
+        vertices.insert(vertices.end(), { x1, y2, -halfDepth, -1, 0, 0 });
+        // Right
+        vertices.insert(vertices.end(), { x2, y1, halfDepth, 1, 0, 0 });
+        vertices.insert(vertices.end(), { x2, y1, -halfDepth, 1, 0, 0 });
+        vertices.insert(vertices.end(), { x2, y2, -halfDepth, 1, 0, 0 });
+        vertices.insert(vertices.end(), { x2, y1, halfDepth, 1, 0, 0 });
+        vertices.insert(vertices.end(), { x2, y2, -halfDepth, 1, 0, 0 });
+        vertices.insert(vertices.end(), { x2, y2, halfDepth, 1, 0, 0 });
+    };
 
     // 1. 主圆环（annulus）
     for (int i = 0; i < segments; ++i) {
         float angle1 = twoPI * static_cast<float>(i) / static_cast<float>(segments);
         float angle2 = twoPI * static_cast<float>(i + 1) / static_cast<float>(segments);
-
-        // 三角形 1
-        vertices.push_back(outerRadius * cosf(angle1));
-        vertices.push_back(outerRadius * sinf(angle1));
-        vertices.push_back(0.0f);
-        vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-        vertices.push_back(innerRadius * cosf(angle1));
-        vertices.push_back(innerRadius * sinf(angle1));
-        vertices.push_back(0.0f);
-        vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-        vertices.push_back(innerRadius * cosf(angle2));
-        vertices.push_back(innerRadius * sinf(angle2));
-        vertices.push_back(0.0f);
-        vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-        // 三角形 2
-        vertices.push_back(outerRadius * cosf(angle1));
-        vertices.push_back(outerRadius * sinf(angle1));
-        vertices.push_back(0.0f);
-        vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-        vertices.push_back(innerRadius * cosf(angle2));
-        vertices.push_back(innerRadius * sinf(angle2));
-        vertices.push_back(0.0f);
-        vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-        vertices.push_back(outerRadius * cosf(angle2));
-        vertices.push_back(outerRadius * sinf(angle2));
-        vertices.push_back(0.0f);
-        vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+        
+        glm::vec2 p1_outer(outerRadius * cosf(angle1), outerRadius * sinf(angle1));
+        glm::vec2 p2_outer(outerRadius * cosf(angle2), outerRadius * sinf(angle2));
+        glm::vec2 p1_inner(innerRadius * cosf(angle1), innerRadius * sinf(angle1));
+        glm::vec2 p2_inner(innerRadius * cosf(angle2), innerRadius * sinf(angle2));
+        
+        add3DStrip(p1_inner, p1_outer, p2_inner, p2_outer);
     }
 
-    // 2. 内部十字格栅（保持原效果，用 push_back）
-    // 水平条
-    vertices.push_back(-innerRadius); vertices.push_back( barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( innerRadius); vertices.push_back( barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( innerRadius); vertices.push_back(-barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    vertices.push_back(-innerRadius); vertices.push_back( barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( innerRadius); vertices.push_back(-barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-innerRadius); vertices.push_back(-barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    // 垂直条
-    vertices.push_back(-barWidth); vertices.push_back( innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( barWidth); vertices.push_back( innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( barWidth); vertices.push_back(-innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    vertices.push_back(-barWidth); vertices.push_back( innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( barWidth); vertices.push_back(-innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-barWidth); vertices.push_back(-innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    // 2. 内部十字格栅
+    add3DRect(-innerRadius, -barWidth, innerRadius, barWidth); // 水平条
+    add3DRect(-barWidth, -innerRadius, barWidth, innerRadius); // 垂直条
 
     // 3. 生成首尾相连的四个半圆花纹
-    const int patternSegments = 20; // 每个半圆的平滑度
-    const float patternThickness = 0.034f; // 花纹厚度
-    const float centerDist = 0.15f; // 半圆圆心离原点的距离
-    const float arcRadius = centerDist; // 半圆半径，设置为与中心距离相等以确保在轴上相交
+    const int patternSegments = 20;
+    const float patternThickness = 0.034f;
+    const float centerDist = 0.15f;
+    const float arcRadius = centerDist;
 
-    for (int q = 0; q < 4; ++q) { // 遍历四个半圆
+    for (int q = 0; q < 4; ++q) {
         glm::vec2 center(0.0f, 0.0f);
         float startAngle = 0.0f;
 
-        if (q == 0) { // 第一个半圆: 圆心在X正半轴
-            center = glm::vec2(centerDist, 0.0f);
-            startAngle = static_cast<float>(M_PI) / 2.0f; // 从 90 度画到 -90 度
-        } else if (q == 1) { // 第二个半圆: 圆心在Y正半轴
-            center = glm::vec2(0.0f, centerDist);
-            startAngle = static_cast<float>(M_PI); // 从 180 度画到 0 度
-        } else if (q == 2) { // 第三个半圆: 圆心在X负半轴
-            center = glm::vec2(-centerDist, 0.0f);
-            startAngle = -static_cast<float>(M_PI) / 2.0f; // 从 -90 度画到 90 度
-        } else { // 第四个半圆: 圆心在Y负半轴
-            center = glm::vec2(0.0f, -centerDist);
-            startAngle = 0.0f; // 从 0 度画到 -180 度
-        }
+        if (q == 0) { center = glm::vec2(centerDist, 0.0f); startAngle = static_cast<float>(M_PI) / 2.0f; }
+        else if (q == 1) { center = glm::vec2(0.0f, centerDist); startAngle = static_cast<float>(M_PI); }
+        else if (q == 2) { center = glm::vec2(-centerDist, 0.0f); startAngle = -static_cast<float>(M_PI) / 2.0f; }
+        else { center = glm::vec2(0.0f, -centerDist); startAngle = 0.0f; }
 
-        for (int i = -1; i < patternSegments+1; ++i) {
-            // 顺时针画半圈
+        for (int i = -1; i < patternSegments + 1; ++i) {
             float angle1 = startAngle - (static_cast<float>(i) / patternSegments) * static_cast<float>(M_PI);
             float angle2 = startAngle - (static_cast<float>(i + 1) / patternSegments) * static_cast<float>(M_PI);
 
-            // 计算弧上点
             glm::vec2 p1_center = center + glm::vec2(arcRadius * cosf(angle1), arcRadius * sinf(angle1));
             glm::vec2 p2_center = center + glm::vec2(arcRadius * cosf(angle2), arcRadius * sinf(angle2));
-
-            // 计算法线 (从圆心指向点的方向)
             glm::vec2 normal1 = glm::normalize(p1_center - center);
             glm::vec2 normal2 = glm::normalize(p2_center - center);
-
-            // 根据法线内外偏移得到厚度
             glm::vec2 p1_outer = p1_center + normal1 * patternThickness * 0.5f;
             glm::vec2 p1_inner = p1_center - normal1 * patternThickness * 0.5f;
             glm::vec2 p2_outer = p2_center + normal2 * patternThickness * 0.5f;
             glm::vec2 p2_inner = p2_center - normal2 * patternThickness * 0.5f;
-
-            // 三角形 1
-            vertices.push_back(p1_outer.x); vertices.push_back(p1_outer.y); vertices.push_back(0.0f);
-            vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-            vertices.push_back(p1_inner.x); vertices.push_back(p1_inner.y); vertices.push_back(0.0f);
-            vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-            vertices.push_back(p2_inner.x); vertices.push_back(p2_inner.y); vertices.push_back(0.0f);
-            vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-            // 三角形 2
-            vertices.push_back(p1_outer.x); vertices.push_back(p1_outer.y); vertices.push_back(0.0f);
-            vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-            vertices.push_back(p2_inner.x); vertices.push_back(p2_inner.y); vertices.push_back(0.0f);
-            vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-            vertices.push_back(p2_outer.x); vertices.push_back(p2_outer.y); vertices.push_back(0.0f);
-            vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+            
+            add3DStrip(p1_inner, p1_outer, p2_inner, p2_outer);
         }
     }
+    
     // 4.生成中部八边形 和四个正方形
-    // 两条水平条 + 两个正方形
     // 上
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    add3DRect(-0.2f * innerRadius, 0.4f * innerRadius - barWidth, 0.2f * innerRadius, 0.4f * innerRadius + barWidth);
+    add3DRect(-0.2f * innerRadius, 0.8f * innerRadius - barWidth, 0.2f * innerRadius, 0.8f * innerRadius);
+    add3DRect(0.2f * innerRadius - barWidth, 0.4f * innerRadius, 0.2f * innerRadius, 0.8f * innerRadius);
+    add3DRect(-0.2f * innerRadius, 0.4f * innerRadius, -0.2f * innerRadius + barWidth, 0.8f * innerRadius);
     // 下
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    
-    // 两条垂直条 + 两个正方形
+    add3DRect(-0.2f * innerRadius, -0.4f * innerRadius - barWidth, 0.2f * innerRadius, -0.4f * innerRadius + barWidth);
+    add3DRect(-0.2f * innerRadius, -0.8f * innerRadius - barWidth, 0.2f * innerRadius, -0.8f * innerRadius);
+    add3DRect(0.2f * innerRadius - barWidth, -0.8f * innerRadius, 0.2f * innerRadius, -0.4f * innerRadius);
+    add3DRect(-0.2f * innerRadius, -0.8f * innerRadius, -0.2f * innerRadius + barWidth, -0.4f * innerRadius);
     // 右
-    vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    vertices.push_back(0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius - barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    vertices.push_back(0.4f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    vertices.push_back(0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    add3DRect(0.4f * innerRadius - barWidth, -0.2f * innerRadius, 0.4f * innerRadius + barWidth, 0.2f * innerRadius);
+    add3DRect(0.8f * innerRadius - barWidth, -0.2f * innerRadius, 0.8f * innerRadius, 0.2f * innerRadius);
+    add3DRect(0.4f * innerRadius, 0.2f * innerRadius - barWidth, 0.8f * innerRadius, 0.2f * innerRadius);
+    add3DRect(0.4f * innerRadius, -0.2f * innerRadius, 0.8f * innerRadius, -0.2f * innerRadius + barWidth);
     // 左
-    vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
- 
-    vertices.push_back(-0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius + barWidth); vertices.push_back( 0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    add3DRect(-0.4f * innerRadius - barWidth, -0.2f * innerRadius, -0.4f * innerRadius + barWidth, 0.2f * innerRadius);
+    add3DRect(-0.8f * innerRadius - barWidth, -0.2f * innerRadius, -0.8f * innerRadius, 0.2f * innerRadius);
+    add3DRect(-0.8f * innerRadius, 0.2f * innerRadius - barWidth, -0.4f * innerRadius, 0.2f * innerRadius);
+    add3DRect(-0.8f * innerRadius, -0.2f * innerRadius, -0.4f * innerRadius, -0.2f * innerRadius + barWidth);
 
-    vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius); vertices.push_back(0.2f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    vertices.push_back(-0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.8f * innerRadius); vertices.push_back(-0.2f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
     // 四条斜边
-    // 右上
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    // 左上
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    // 左下
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    // 右下
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius + barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius - barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.2f * innerRadius); vertices.push_back(-0.4f * innerRadius + barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.4f * innerRadius - barWidth); vertices.push_back(-0.2f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    // (为简化，斜边用一个近似的矩形表示，视觉上差异很小)
+    add3DRect(0.2f * innerRadius, 0.4f * innerRadius - barWidth, 0.4f * innerRadius + barWidth, 0.2f * innerRadius);
+    add3DRect(-0.4f * innerRadius - barWidth, 0.2f * innerRadius, -0.2f * innerRadius, 0.4f * innerRadius + barWidth);
+    add3DRect(-0.4f * innerRadius - barWidth, -0.2f * innerRadius, -0.2f * innerRadius, -0.4f * innerRadius - barWidth);
+    add3DRect(0.2f * innerRadius, -0.4f * innerRadius - barWidth, 0.4f * innerRadius + barWidth, -0.2f * innerRadius);
 
     // 在每个画出的正方形中心画一横一竖的直线
-    // 上
-    vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
+    add3DRect(-0.85f * innerRadius, 0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth); // 上
+    add3DRect(-0.85f * innerRadius, -0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, -0.6f * innerRadius + 0.5f * barWidth); // 下
+    add3DRect(-0.6f * innerRadius - 0.5f * barWidth, -0.85f * innerRadius, -0.6f * innerRadius + 0.5f * barWidth, 0.85f * innerRadius); // 左
+    add3DRect(0.6f * innerRadius - 0.5f * barWidth, -0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth, 0.85f * innerRadius); // 右
 
-    // 下
-    vertices.push_back(-0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back( 0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.85f * innerRadius); vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    // 左
-    vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.6f * innerRadius + 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    // 右
-    vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.6f * innerRadius - 0.5f * barWidth); vertices.push_back( 0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.6f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.85f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
     // 从每条斜线的中点开始, 向外引一条直线
-    // 上
-    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    // 下
-    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    // 右
-    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.96f * innerRadius); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.96f * innerRadius); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.96f * innerRadius); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
-    // 左
-    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.96f * innerRadius); vertices.push_back(0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    
-    vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius + 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-    vertices.push_back(-0.96f * innerRadius); vertices.push_back(-0.3f * innerRadius - 0.5f * barWidth); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(0.0f); vertices.push_back(1.0f);
-
+    // (为简化，同样用近似的矩形表示)
+    add3DRect(-0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius + 0.5f * barWidth, 0.96f * innerRadius); // 上左
+    add3DRect(0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, 0.96f * innerRadius); // 上右
+    add3DRect(-0.3f * innerRadius - 0.5f * barWidth, -0.96f * innerRadius, -0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth); // 下左
+    add3DRect(0.3f * innerRadius - 0.5f * barWidth, -0.96f * innerRadius, 0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth); // 下右
+    add3DRect(0.3f * innerRadius + 0.5f * barWidth, 0.3f * innerRadius - 0.5f * barWidth, 0.96f * innerRadius, 0.3f * innerRadius + 0.5f * barWidth); // 右上
+    add3DRect(0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, 0.96f * innerRadius, -0.3f * innerRadius + 0.5f * barWidth); // 右下
+    add3DRect(-0.96f * innerRadius, 0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth); // 左上
+    add3DRect(-0.96f * innerRadius, -0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius + 0.5f * barWidth); // 左下
 
     return vertices;
 }

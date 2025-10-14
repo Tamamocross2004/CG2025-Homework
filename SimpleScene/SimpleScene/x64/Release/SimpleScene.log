@@ -8,4 +8,9 @@ D:\code\OpenGL\Project\Homework1\SimpleScene\mesh.h(1,1): warning C4819: 该文�
 D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(153,27): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
 D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(157,33): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
 D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(349,51): warning C4305: “参数”: 从“double”到“float”截断
-  SimpleScene.vcxproj -> D:\code\OpenGL\Project\Homework1\SimpleScene\x64\Debug\SimpleScene.exe
+  正在生成代码
+  1 of 891 functions ( 0.1%) were compiled, the rest were copied from previous compilation.
+    0 functions were new in current compilation
+    8 functions had inline decision re-evaluated but remain unchanged
+  已完成代码的生成
+  SimpleScene.vcxproj -> D:\code\OpenGL\Project\Homework1\SimpleScene\x64\Release\SimpleScene.exe
