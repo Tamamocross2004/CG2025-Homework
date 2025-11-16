@@ -1,4 +1,4 @@
-#include <glad/glad.h>
+ï»¿#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 
 #include <glm/glm.hpp>
@@ -7,8 +7,10 @@
 
 #include "shader.h"
 #include "camera.h"
-#define STB_IMAGE_IMPLEMENTATION
+// #define STB_IMAGE_IMPLEMENTATION
 #include "model.h"
+#include "sandbox_mesh.h"
+#include "stb_image.h"
 
 #include <iostream>
 #include <vector>
@@ -22,31 +24,31 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
-// Éú³ÉÖĞÊ½ïÎ¿Õ´°
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê½ï¿½Î¿Õ´ï¿½
 std::vector<float> generateCircularWindowVertices(int segments, float outerRadius, float innerRadius, float barWidth, float depth);
-// Éú³É´ø¶´Ç½Ìå
+// ï¿½ï¿½ï¿½É´ï¿½ï¿½ï¿½Ç½ï¿½ï¿½
 std::vector<float> generateWallWithHoleVertices(float width, float height, float holeRadius, int segments);
 
-// ´°¿ÚÉèÖÃ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 const unsigned int SCR_WIDTH = 1600;
 const unsigned int SCR_HEIGHT = 1200;
 
-// ÉãÏñ»úÉèÖÃ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 Camera camera(glm::vec3(0.0f, 0.0f, 5.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
 
-// Ê±¼äÉèÖÃ
+// Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// ¹âÕÕÉèÖÃ
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 glm::vec3 lightPos(0.0f, 2.5f, 3.0f);
 
 int main()
 {
-    // ³õÊ¼»¯²¢ÅäÖÃglfw
+    // ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½glfw
     // ------------------------------
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -57,7 +59,7 @@ int main()
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-    // glfw´´½¨´°¿Ú
+    // glfwï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     // --------------------
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
     if (window == NULL)
@@ -71,10 +73,10 @@ int main()
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
 
-    // ¸æËß GLFW ²¶»ñÎÒÃÇµÄÊó±ê
+    // ï¿½ï¿½ï¿½ï¿½ GLFW ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Çµï¿½ï¿½ï¿½ï¿½
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    // glad£º¼ÓÔØËùÓĞ OpenGL º¯ÊıÖ¸Õë
+    // gladï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ OpenGL ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
     // ---------------------------------------
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
@@ -83,21 +85,42 @@ int main()
     }
     stbi_set_flip_vertically_on_load(true);
 
-    // ÅäÖÃÈ«¾Ö OpenGL ×´Ì¬
+    // ï¿½ï¿½ï¿½ï¿½È«ï¿½ï¿½ OpenGL ×´Ì¬
     // -----------------------------
     glEnable(GL_DEPTH_TEST);
 
-    // ±àÒëshader²Ù×÷
+    // Shader
     // ------------------------------------
     Shader lightingShader("lighting.vs", "lighting.fs");
     Shader lightCubeShader("lightcube.vs", "lightcube.fs");
     Shader modelShader("model_loading.vs", "model_loading.fs");
+    Shader sandboxShader("sandbox.vs", "sandbox.fs");
     
-    // --- ¼ÓÔØÄ£ĞÍ ---
+    // --- åŠ è½½æ¨¡å‹ ---
     Model ourModel("resource/model/table3.obj");
     Model lampModel("resource/lamp/lamp1.obj");
 
-    // Í³Ò»ÉèÖÃÓÃµ½µÄ×ø±êĞÅÏ¢(Ã¿Ò»ĞĞÇ°Èı¸öÊı×ÖÎªµãµÄ×ø±ê£¬ºóÈı¸öÎª·¨ÏòÁ¿)
+    // --- åˆ›å»ºæ²™ç›˜å®ä¾‹ ---
+    // æ–¹æ³•1ï¼šä»é«˜åº¦å›¾åˆ›å»º
+    TerrainSandbox sandbox_heightmap(
+        1.5f, // å®½åº¦
+        1.0f, // æ·±åº¦
+        128,  // ç½‘æ ¼ç²¾åº¦
+        TerrainSandbox::GenMethod::HEIGHTMAP,
+        "resource/textures/heightmap1.png", // é«˜åº¦å›¾è·¯å¾„
+        "resource/textures/red_sand_diff_4k.jpg"  // æ²™å­çº¹ç†è·¯å¾„
+    );
+
+    // æ–¹æ³•2ï¼šç¨‹åºåŒ–éšæœºç”Ÿæˆ
+    TerrainSandbox sandbox_procedural(
+        1.5f, 1.0f, 64,
+        TerrainSandbox::GenMethod::PROCEDURAL_RANDOM,
+        nullptr,
+        "resource/textures/red_sand_diff_4k.jpg"
+    );
+
+
+    // Í³Ò»ï¿½ï¿½ï¿½ï¿½ï¿½Ãµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢(Ã¿Ò»ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ê£¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
     // ------------------------------------------------------------------
     float vertices[] = {
         // positions          // normals 
@@ -144,7 +167,7 @@ int main()
         -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
     };
 
-    // --- Éú³ÉÔ²ĞÎ´°»§µÄ¶¥µãÊı¾İ ---
+    // --- ï¿½ï¿½ï¿½ï¿½Ô²ï¿½Î´ï¿½ï¿½ï¿½ï¿½Ä¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ---
     // ------------------------------------------------------------------
     float windowOuterRadius = 1.2f;
     float windowScale = 1.2f;
@@ -152,11 +175,11 @@ int main()
     std::vector<float> circularWindowVertices = generateCircularWindowVertices(72, windowOuterRadius, 1.1f, 0.05f, 0.1f);    
     int windowVertexCount = circularWindowVertices.size() / 6;
 
-    // --- Éú³É´ø¶´ºóÇ½µÄ¶¥µãÊı¾İ ---
+    // --- ï¿½ï¿½ï¿½É´ï¿½ï¿½ï¿½ï¿½ï¿½Ç½ï¿½Ä¶ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ---
     std::vector<float> wallWithHoleVertices = generateWallWithHoleVertices(8.0f, 6.0f, windowOuterRadius * windowScale, 72);
     int wallWithHoleVertexCount = wallWithHoleVertices.size() / 6;
 
-    // ·¿¼äÇ½±Ú¡¢µØ°å¡¢Ìì»¨°åµÄVAO/VBO
+    // ï¿½ï¿½ï¿½ï¿½Ç½ï¿½Ú¡ï¿½ï¿½Ø°å¡¢ï¿½ì»¨ï¿½ï¿½ï¿½VAO/VBO
     // ------------------------------------------------------------------
     unsigned int roomVAO, roomVBO;
     glGenVertexArrays(1, &roomVAO);
@@ -164,14 +187,14 @@ int main()
     glBindVertexArray(roomVAO);
     glBindBuffer(GL_ARRAY_BUFFER, roomVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    // ÔØÈëÎ»ÖÃ
+    // ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    // ÔØÈë·¨ÏòÁ¿
+    // ï¿½ï¿½ï¿½ë·¨ï¿½ï¿½ï¿½ï¿½
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // ´°»§µÄVAO/VBO
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½VAO/VBO
     // ------------------------------------------------------------------
     unsigned int windowVAO, windowVBO;
     glGenVertexArrays(1, &windowVAO);
@@ -179,24 +202,24 @@ int main()
     glBindVertexArray(windowVAO);
     glBindBuffer(GL_ARRAY_BUFFER, windowVBO);
     glBufferData(GL_ARRAY_BUFFER, circularWindowVertices.size() * sizeof(float), circularWindowVertices.data(), GL_STATIC_DRAW);
-    // ÔØÈëÎ»ÖÃ
+    // ï¿½ï¿½ï¿½ï¿½Î»ï¿½ï¿½
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    // ÔØÈë·¨ÏòÁ¿
+    // ï¿½ï¿½ï¿½ë·¨ï¿½ï¿½ï¿½ï¿½
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // ÔØÈë·½¿éµÆµÄ¶¥µãĞÅÏ¢
+    // ï¿½ï¿½ï¿½ë·½ï¿½ï¿½ÆµÄ¶ï¿½ï¿½ï¿½ï¿½ï¿½Ï¢
     // ------------------------------------------------------------------
     unsigned int lightCubeVAO;
     glGenVertexArrays(1, &lightCubeVAO);
     glBindVertexArray(lightCubeVAO);
-    // Ö»Ğè°ó¶¨VBO, ÆäÖĞµÄÊı¾İ°üº¬ÁËËùĞèµÄ¶¥µã
+    // Ö»ï¿½ï¿½ï¿½VBO, ï¿½ï¿½ï¿½Ğµï¿½ï¿½ï¿½ï¿½İ°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¶ï¿½ï¿½ï¿½
     glBindBuffer(GL_ARRAY_BUFFER, roomVBO);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     
-    // ´ø¶´ºóÇ½µÄVAO/VBO
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç½ï¿½ï¿½VAO/VBO
     // ------------------------------------------------------------------
     unsigned int wallVAO, wallVBO;
     glGenVertexArrays(1, &wallVAO);
@@ -209,34 +232,34 @@ int main()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // äÖÈ¾Ñ­»·
+    // ï¿½ï¿½È¾Ñ­ï¿½ï¿½
     // -----------
     while (!glfwWindowShouldClose(window))
     {
-        // Ê±¼äÂß¼­
+        // Ê±ï¿½ï¿½ï¿½ß¼ï¿½
         // --------------------
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        // ÊäÈë
+        // ï¿½ï¿½ï¿½ï¿½
         // -----
         processInput(window);
 
-        // ¿ªÊ¼äÖÈ¾
+        // ï¿½ï¿½Ê¼ï¿½ï¿½È¾
         // ------
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // ¹âÔ´Î»ÖÃ¹Ì¶¨ÔÚÌ¨µÆ´¦
+        // ï¿½ï¿½Ô´Î»ï¿½Ã¹Ì¶ï¿½ï¿½ï¿½Ì¨ï¿½Æ´ï¿½
         glm::vec3 lampLightPos = glm::vec3(-1.0f, -1.1f, -2.5f);
 
-        // ¶¨Òå»è°µµÄÅ¯É«¹âµÄ»ù´¡ÑÕÉ«ºÍÇ¿¶È
+        // ï¿½ï¿½ï¿½ï¿½è°µï¿½ï¿½Å¯É«ï¿½ï¿½Ä»ï¿½ï¿½ï¿½ï¿½ï¿½É«ï¿½ï¿½Ç¿ï¿½ï¿½
         glm::vec3 warmColor(1.0f, 0.85f, 0.6f);
-        float overallIntensity = 0.6f; // ÕûÌåÁÁ¶ÈÒò×Ó
+        float overallIntensity = 0.6f; // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         glm::vec3 finalLightColor = warmColor * overallIntensity;
 
-        // È·±£ÔÚÉèÖÃ Uniforms/Drawing ¶ÔÏóÊ±¼¤»î Shader
+        // È·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Uniforms/Drawing ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ Shader
         //---------------------------------------------------------------------
         lightingShader.use();
         lightingShader.setVec3("lightPos", lampLightPos);
@@ -252,112 +275,117 @@ int main()
 
         glBindVertexArray(roomVAO);
 
-        //»æÖÆÌì»¨°å
+        // å°ç¯æ¨¡å‹
         {
-            //ÉèÖÃ¹âÕÕ²ÎÊı
+            //ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½Õ²ï¿½ï¿½ï¿½
             lightingShader.setVec3("objectColor", 0.5, 0.5f, 0.5f);
 
-            // ÊÀ½ç×ø±ê±ä»»
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ä»»
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0.0f, 3.0f, 0.0f));
             model = glm::scale(model, glm::vec3(8.0f, 0.1f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // äÖÈ¾
+            // ï¿½ï¿½È¾
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // »æÖÆµØ°å
+        // ï¿½ï¿½ï¿½ÆµØ°ï¿½
         {
-            //ÉèÖÃ¹âÕÕ²ÎÊı
+            //ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½Õ²ï¿½ï¿½ï¿½
+            lightingShader.use();
             lightingShader.setVec3("objectColor", 0.4f, 0.3f, 0.25f);
 
-            // ÊÀ½ç×ø±ê±ä»»
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ä»»
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0.0f, -3.0f, 0.0f));
             model = glm::scale(model, glm::vec3(8.0f, 0.1f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // äÖÈ¾
+            // ï¿½ï¿½È¾
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // »æÖÆ×óÇ½
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç½
         {
-            //ÉèÖÃ¹âÕÕ²ÎÊı
+            //ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½Õ²ï¿½ï¿½ï¿½
+            lightingShader.use();
             lightingShader.setVec3("objectColor", 0.9f, 0.85f, 0.7f);
 
-            // ÊÀ½ç×ø±ê±ä»»
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ä»»
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(-4.0f, 0.0f, 0.0f));
             model = glm::scale(model, glm::vec3(0.1f, 6.0f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // äÖÈ¾
+            // ï¿½ï¿½È¾
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // »æÖÆÓÒÇ½
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç½
         {
-            //ÉèÖÃ¹âÕÕ²ÎÊı
+            //ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½Õ²ï¿½ï¿½ï¿½
+            lightingShader.use();
             lightingShader.setVec3("objectColor", 0.9f, 0.85f, 0.7f);
 
-            // ÊÀ½ç×ø±ê±ä»»
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ä»»
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(4.0f, 0.0f, 0.0f));
             model = glm::scale(model, glm::vec3(0.1f, 6.0f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // äÖÈ¾
+            // ï¿½ï¿½È¾
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // // »æÖÆºóÇ½
+        // // ï¿½ï¿½ï¿½Æºï¿½Ç½
         // {
-        //     //ÉèÖÃ¹âÕÕ²ÎÊı
+        //     //ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½Õ²ï¿½ï¿½ï¿½
         //     lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
 
-        //     // ÊÀ½ç×ø±ê±ä»»
+        //     // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ä»»
         //     model = glm::mat4(1.0f);
         //     model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f));
         //     model = glm::scale(model, glm::vec3(8.0f, 6.0f, 0.1f));
         //     lightingShader.setMat4("model", model);
 
-        //     // äÖÈ¾
+        //     // ï¿½ï¿½È¾
         //     glDrawArrays(GL_TRIANGLES, 0, 36);
         // }
         
-        // »æÖÆ´ø¶´µÄºóÇ½
+        // ï¿½ï¿½ï¿½Æ´ï¿½ï¿½ï¿½ï¿½Äºï¿½Ç½
         {
-            //ÉèÖÃ¹âÕÕ²ÎÊı
+            //ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½Õ²ï¿½ï¿½ï¿½
+            lightingShader.use();
             lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
 
-            // ÊÀ½ç×ø±ê±ä»»
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ä»»
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f));
-            // ×¢Òâ£ºÕâÀï²»ÔÙĞèÒª scale£¬ÒòÎª¶¥µãÊı¾İÒÑ¾­¶¨ÒåÁËÕıÈ·µÄ³ß´ç
+            // ×¢ï¿½â£ºï¿½ï¿½ï¿½ï²»ï¿½ï¿½ï¿½ï¿½Òª scaleï¿½ï¿½ï¿½ï¿½Îªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È·ï¿½Ä³ß´ï¿½
             lightingShader.setMat4("model", model);
 
-            // äÖÈ¾´ø¶´µÄÇ½
+            // ï¿½ï¿½È¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç½
             glBindVertexArray(wallVAO);
             glDrawArrays(GL_TRIANGLES, 0, wallWithHoleVertexCount);
         }
 
-        // »æÖÆ´°»§
+        // ï¿½ï¿½ï¿½Æ´ï¿½ï¿½ï¿½
         {
-            //ÉèÖÃ¹âÕÕ²ÎÊı
-            lightingShader.setVec3("objectColor", 0.36, 0.2f, 0.09f); // Ä¾ÖÊÑÕÉ«
+            //ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½Õ²ï¿½ï¿½ï¿½
+            lightingShader.use();
+            lightingShader.setVec3("objectColor", 0.36, 0.2f, 0.09f); // Ä¾ï¿½ï¿½ï¿½ï¿½É«
 
-            // ÊÀ½ç×ø±ê±ä»»
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ä»»
             model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f)); // ·ÅÖÃÔÚºóÇ½Ç°Ò»µã
+            model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f)); // ï¿½ï¿½ï¿½ï¿½ï¿½Úºï¿½Ç½Ç°Ò»ï¿½ï¿½
             model = glm::scale(model, glm::vec3(1.2f));
             lightingShader.setMat4("model", model);
             glBindVertexArray(windowVAO);
             glDrawArrays(GL_TRIANGLES, 0, windowVertexCount); 
         }
 
-        // // »æÖÆµÆ
+        // // ï¿½ï¿½ï¿½Æµï¿½
         // {
         //     lightCubeShader.use();
         //     lightCubeShader.setMat4("projection", projection);
@@ -371,49 +399,70 @@ int main()
         //     glDrawArrays(GL_TRIANGLES, 0, 36);
         // }
 
-        // --- »æÖÆÊé×ÀÄ£ĞÍ ---
+        // --- ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½ ---
         {
             modelShader.use();
             modelShader.setMat4("projection", projection);
             modelShader.setMat4("view", view);
 
-            // ÉèÖÃ¹âÕÕ
+            // ï¿½ï¿½ï¿½Ã¹ï¿½ï¿½ï¿½
             modelShader.setVec3("viewPos", camera.Position);
             modelShader.setVec3("light.position", lampLightPos);
             modelShader.setVec3("light.ambient", finalLightColor * 0.2f);
             modelShader.setVec3("light.diffuse", finalLightColor);
             modelShader.setVec3("light.specular", finalLightColor * 0.2f);
         
-            // äÖÈ¾¼ÓÔØµÄÄ£ĞÍ
+            // ï¿½ï¿½È¾ï¿½ï¿½ï¿½Øµï¿½Ä£ï¿½ï¿½
             model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, -3.0f, -2.5f)); // ·ÅÔÚµØ°åÉÏ£¬¿¿´°
-            model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));	// ÊÊµ±Ëõ·ÅÄ£ĞÍ
-            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // Ğı×ª90¶È£¬Ê¹ÆäÕı¶ÔÇ°·½
+            model = glm::translate(model, glm::vec3(0.0f, -3.0f, -2.5f)); // ï¿½ï¿½ï¿½ÚµØ°ï¿½ï¿½Ï£ï¿½ï¿½ï¿½ï¿½ï¿½
+            model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));	// ï¿½Êµï¿½ï¿½ï¿½ï¿½ï¿½Ä£ï¿½ï¿½
+            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // ï¿½ï¿½×ª90ï¿½È£ï¿½Ê¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½
             modelShader.setMat4("model", model);
             ourModel.Draw(modelShader);
         }
 
-        // --- »æÖÆÌ¨µÆÄ£ĞÍ ---
+        // --- ï¿½ï¿½ï¿½ï¿½Ì¨ï¿½ï¿½Ä£ï¿½ï¿½ ---
         {
-            // modelShader ÒÑ¾­±»¼¤»î£¬ÇÒ view/projection/light µÈ uniform ÒÑÉèÖÃ
-            // ÎÒÃÇÖ»ĞèÒªÎªÌ¨µÆÉèÖÃÒ»¸öĞÂµÄ model ¾ØÕó
+            // modelShader ï¿½Ñ¾ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½î£¬ï¿½ï¿½ view/projection/light ï¿½ï¿½ uniform ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+            // ï¿½ï¿½ï¿½ï¿½Ö»ï¿½ï¿½ÒªÎªÌ¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Âµï¿½ model ï¿½ï¿½ï¿½ï¿½
             modelShader.use(); 
             model = glm::mat4(1.0f);
-            // ½«Ì¨µÆ·ÅÔÚÊé×À±íÃæÉÏÆ«×óµÄÎ»ÖÃ
+            // ï¿½ï¿½Ì¨ï¿½Æ·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ«ï¿½ï¿½ï¿½Î»ï¿½ï¿½
             model = glm::translate(model, glm::vec3(-1.0f, -0.8f, -3.0f)); 
-            model = glm::scale(model, glm::vec3(0.3f)); // Ëõ·ÅÌ¨µÆÊ¹Æä³ß´çºÏÊÊ
+            model = glm::scale(model, glm::vec3(0.3f)); // ï¿½ï¿½ï¿½ï¿½Ì¨ï¿½ï¿½Ê¹ï¿½ï¿½ß´ï¿½ï¿½ï¿½ï¿½
             modelShader.setMat4("model", model);
             lampModel.Draw(modelShader);
             
         }
 
-        // glfw£º½»»»»º³åÇøºÍÂÖÑ¯ IO ÊÂ¼ş£¨°´ÏÂ/ÊÍ·Å¼ü¡¢ÒÆ¶¯Êó±êµÈ£©
+        // --- ç»˜åˆ¶åœ°å½¢æ²™ç›˜ ---
+        {
+            sandboxShader.use();
+            sandboxShader.setMat4("projection", projection);
+            sandboxShader.setMat4("view", view);
+            sandboxShader.setVec3("viewPos", camera.Position);
+            sandboxShader.setVec3("lightPos", lampLightPos);
+            sandboxShader.setVec3("lightColor", finalLightColor);
+
+            model = glm::mat4(1.0f);
+            // å°†æ²™ç›˜æ”¾åœ¨ä¹¦æ¡Œä¸Š
+            model = glm::translate(model, glm::vec3(0.5f, -1.4f, -3.0f));
+            sandboxShader.setMat4("model", model);
+
+            // ç»˜åˆ¶æ²™ç›˜ (æ ¹æ®é€‰æ‹©çš„æ–¹æ³•)
+            sandbox_heightmap.Draw(sandboxShader);
+            // sandbox_procedural.Draw(sandboxShader);
+        }
+
+
+
+        // glfwï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¯ IO ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½/ï¿½Í·Å¼ï¿½ï¿½ï¿½ï¿½Æ¶ï¿½ï¿½ï¿½ï¿½È£ï¿½
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // £¨¿ÉÑ¡£©Ò»µ©×ÊÔ´³¬³öÆäÓÃÍ¾£¬¾ÍÈ¡Ïû·ÖÅäËùÓĞ×ÊÔ´£º
+    // ï¿½ï¿½ï¿½ï¿½Ñ¡ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¾ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½
     // ------------------------------------------------------------------------
     glDeleteVertexArrays(1, &roomVAO);
     glDeleteVertexArrays(1, &lightCubeVAO);
@@ -423,13 +472,13 @@ int main()
     glDeleteBuffers(1, &windowVBO);
     glDeleteBuffers(1, &wallVBO);
 
-    // glfw£ºÖÕÖ¹£¬Çå³ıËùÓĞÒÔÇ°·ÖÅäµÄ GLFW ×ÊÔ´¡£
+    // glfwï¿½ï¿½ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½ï¿½ GLFW ï¿½ï¿½Ô´ï¿½ï¿½
     // ------------------------------------------------------------------
     glfwTerminate();
     return 0;
 }
 
-//²éÑ¯ GLFW ÊÇ·ñ°´ÏÂ/ÊÍ·ÅÁË¸ÃÖ¡µÄÏà¹Ø¼ü²¢×ö³öÏàÓ¦µÄ·´Ó¦
+//ï¿½ï¿½Ñ¯ GLFW ï¿½Ç·ï¿½ï¿½ï¿½/ï¿½Í·ï¿½ï¿½Ë¸ï¿½Ö¡ï¿½ï¿½ï¿½ï¿½Ø¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ó¦ï¿½Ä·ï¿½Ó¦
 // ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow* window)
 {
@@ -446,16 +495,16 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(RIGHT, deltaTime);
 }
 
-// glfw£ºÃ¿µ±´°¿Ú´óĞ¡·¢Éú±ä»¯£¨Í¨¹ı²Ù×÷ÏµÍ³»òÓÃ»§µ÷Õû´óĞ¡£©Ê±£¬´Ë»Øµ÷º¯Êı¶¼»áÖ´ĞĞ
+// glfwï¿½ï¿½Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½Ú´ï¿½Ğ¡ï¿½ï¿½ï¿½ï¿½ï¿½ä»¯ï¿½ï¿½Í¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÏµÍ³ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ğ¡ï¿½ï¿½Ê±ï¿½ï¿½ï¿½Ë»Øµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö´ï¿½ï¿½
 // ---------------------------------------------------------------------------------------------
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-    // È·±£ÊÓÇøÓëĞÂµÄ´°¿Ú³ß´çÆ¥Åä;Çë×¢Òâ£¬widthºÍheight½«Ã÷ÏÔ´óÓÚ Retina ÏÔÊ¾ÆÁÉÏÖ¸¶¨µÄ¸ß¶È
+    // È·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ÂµÄ´ï¿½ï¿½Ú³ß´ï¿½Æ¥ï¿½ï¿½;ï¿½ï¿½×¢ï¿½â£¬widthï¿½ï¿½heightï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ Retina ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½ï¿½Ä¸ß¶ï¿½
     glViewport(0, 0, width, height);
 }
 
 
-// glfw: Ã¿µ±Êó±êÒÆ¶¯Ê±£¬¸Ã»Øµ÷¶¼»á±»µ÷ÓÃ
+// glfw: Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ¶ï¿½Ê±ï¿½ï¿½ï¿½Ã»Øµï¿½ï¿½ï¿½ï¿½á±»ï¿½ï¿½ï¿½ï¿½
 // -------------------------------------------------------
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
@@ -469,7 +518,7 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     }
 
     float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // ·´×ª£¬ÒòÎª y ×ø±ê´ÓÏÂµ½ÉÏ
+    float yoffset = lastY - ypos; // ï¿½ï¿½×ªï¿½ï¿½ï¿½ï¿½Îª y ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Âµï¿½ï¿½ï¿½
 
     lastX = xpos;
     lastY = ypos;
@@ -477,21 +526,21 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
-// glfw:Ã¿µ±Êó±ê¹öÂÖ¹ö¶¯Ê±£¬¸Ã»Øµ÷¶¼»á±»µ÷ÓÃ
+// glfw:Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½Ê±ï¿½ï¿½ï¿½Ã»Øµï¿½ï¿½ï¿½ï¿½á±»ï¿½ï¿½ï¿½ï¿½
 // ----------------------------------------------------------------------
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
 
-// ½«Éú³ÉÔ²ĞÎ´°»§¶¥µãµÄÂß¼­·â×°³ÉÒ»¸ö¶ÀÁ¢µÄº¯Êı
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô²ï¿½Î´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ß¼ï¿½ï¿½ï¿½×°ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Äºï¿½ï¿½ï¿½
 std::vector<float> generateCircularWindowVertices(int segments, float outerRadius, float innerRadius, float barWidth, float depth)
 {
     std::vector<float> vertices;
     const float twoPI = 2.0f * static_cast<float>(M_PI);
     float halfDepth = depth / 2.0f;
 
-    // ¸¨Öúº¯Êı£¬ÓÃÓÚÌí¼ÓÒ»¸öÍêÕûµÄ3DÌõ´øÆ¬¶Î (ÓÃÓÚÇúÏß)
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½3Dï¿½ï¿½ï¿½ï¿½Æ¬ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
     auto add3DStrip = [&](glm::vec2 p1_inner, glm::vec2 p1_outer, glm::vec2 p2_inner, glm::vec2 p2_outer) {
         // Front face
         vertices.insert(vertices.end(), { p1_outer.x, p1_outer.y, halfDepth, 0, 0, 1 });
@@ -528,7 +577,7 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
         vertices.insert(vertices.end(), { p2_inner.x, p2_inner.y, -halfDepth, inner_normal.x, inner_normal.y, 0 });
     };
     
-    // ¸¨Öúº¯Êı£¬ÓÃÓÚÌí¼ÓÒ»¸öÍêÕûµÄ3D¾ØĞÎ (ÓÃÓÚÖ±Ïß)
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½3Dï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½Ö±ï¿½ï¿½)
     auto add3DRect = [&](float x1, float y1, float x2, float y2) {
         // Front
         vertices.insert(vertices.end(), { x1, y1, halfDepth, 0, 0, 1 });
@@ -574,7 +623,7 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
         vertices.insert(vertices.end(), { x2, y2, halfDepth, 1, 0, 0 });
     };
 
-    // 1. Ö÷Ô²»·£¨annulus£©
+    // 1. ï¿½ï¿½Ô²ï¿½ï¿½ï¿½ï¿½annulusï¿½ï¿½
     for (int i = 0; i < segments; ++i) {
         float angle1 = twoPI * static_cast<float>(i) / static_cast<float>(segments);
         float angle2 = twoPI * static_cast<float>(i + 1) / static_cast<float>(segments);
@@ -587,11 +636,11 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
         add3DStrip(p1_inner, p1_outer, p2_inner, p2_outer);
     }
 
-    // 2. ÄÚ²¿Ê®×Ö¸ñÕ¤
-    add3DRect(-innerRadius, -barWidth, innerRadius, barWidth); // Ë®Æ½Ìõ
-    add3DRect(-barWidth, -innerRadius, barWidth, innerRadius); // ´¹Ö±Ìõ
+    // 2. ï¿½Ú²ï¿½Ê®ï¿½Ö¸ï¿½Õ¤
+    add3DRect(-innerRadius, -barWidth, innerRadius, barWidth); // Ë®Æ½ï¿½ï¿½
+    add3DRect(-barWidth, -innerRadius, barWidth, innerRadius); // ï¿½ï¿½Ö±ï¿½ï¿½
 
-    // 3. Éú³ÉÊ×Î²ÏàÁ¬µÄËÄ¸ö°ëÔ²»¨ÎÆ
+    // 3. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¸ï¿½ï¿½ï¿½Ô²ï¿½ï¿½ï¿½ï¿½
     const int patternSegments = 20;
     const float patternThickness = 0.034f;
     const float centerDist = 0.15f;
@@ -623,56 +672,56 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
         }
     }
     
-    // 4.Éú³ÉÖĞ²¿°Ë±ßĞÎ ºÍËÄ¸öÕı·½ĞÎ
-    // ÉÏ
+    // 4.ï¿½ï¿½ï¿½ï¿½ï¿½Ğ²ï¿½ï¿½Ë±ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ä¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    // ï¿½ï¿½
     add3DRect(-0.2f * innerRadius, 0.4f * innerRadius - barWidth, 0.2f * innerRadius, 0.4f * innerRadius + barWidth);
     add3DRect(-0.2f * innerRadius, 0.8f * innerRadius - barWidth, 0.2f * innerRadius, 0.8f * innerRadius);
     add3DRect(0.2f * innerRadius - barWidth, 0.4f * innerRadius, 0.2f * innerRadius, 0.8f * innerRadius);
     add3DRect(-0.2f * innerRadius, 0.4f * innerRadius, -0.2f * innerRadius + barWidth, 0.8f * innerRadius);
-    // ÏÂ
+    // ï¿½ï¿½
     add3DRect(-0.2f * innerRadius, -0.4f * innerRadius - barWidth, 0.2f * innerRadius, -0.4f * innerRadius + barWidth);
     add3DRect(-0.2f * innerRadius, -0.8f * innerRadius - barWidth, 0.2f * innerRadius, -0.8f * innerRadius);
     add3DRect(0.2f * innerRadius - barWidth, -0.8f * innerRadius, 0.2f * innerRadius, -0.4f * innerRadius);
     add3DRect(-0.2f * innerRadius, -0.8f * innerRadius, -0.2f * innerRadius + barWidth, -0.4f * innerRadius);
-    // ÓÒ
+    // ï¿½ï¿½
     add3DRect(0.4f * innerRadius - barWidth, -0.2f * innerRadius, 0.4f * innerRadius + barWidth, 0.2f * innerRadius);
     add3DRect(0.8f * innerRadius - barWidth, -0.2f * innerRadius, 0.8f * innerRadius, 0.2f * innerRadius);
     add3DRect(0.4f * innerRadius, 0.2f * innerRadius - barWidth, 0.8f * innerRadius, 0.2f * innerRadius);
     add3DRect(0.4f * innerRadius, -0.2f * innerRadius, 0.8f * innerRadius, -0.2f * innerRadius + barWidth);
-    // ×ó
+    // ï¿½ï¿½
     add3DRect(-0.4f * innerRadius - barWidth, -0.2f * innerRadius, -0.4f * innerRadius + barWidth, 0.2f * innerRadius);
     add3DRect(-0.8f * innerRadius - barWidth, -0.2f * innerRadius, -0.8f * innerRadius, 0.2f * innerRadius);
     add3DRect(-0.8f * innerRadius, 0.2f * innerRadius - barWidth, -0.4f * innerRadius, 0.2f * innerRadius);
     add3DRect(-0.8f * innerRadius, -0.2f * innerRadius, -0.4f * innerRadius, -0.2f * innerRadius + barWidth);
 
-    // ËÄÌõĞ±±ß
-    // (Îª¼ò»¯£¬Ğ±±ßÓÃÒ»¸ö½üËÆµÄ¾ØĞÎ±íÊ¾£¬ÊÓ¾õÉÏ²îÒìºÜĞ¡)
+    // ï¿½ï¿½ï¿½ï¿½Ğ±ï¿½ï¿½
+    // (Îªï¿½ò»¯£ï¿½Ğ±ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ÆµÄ¾ï¿½ï¿½Î±ï¿½Ê¾ï¿½ï¿½ï¿½Ó¾ï¿½ï¿½Ï²ï¿½ï¿½ï¿½ï¿½Ğ¡)
     add3DRect(0.2f * innerRadius, 0.4f * innerRadius - barWidth, 0.4f * innerRadius + barWidth, 0.2f * innerRadius);
     add3DRect(-0.4f * innerRadius - barWidth, 0.2f * innerRadius, -0.2f * innerRadius, 0.4f * innerRadius + barWidth);
     add3DRect(-0.4f * innerRadius - barWidth, -0.2f * innerRadius, -0.2f * innerRadius, -0.4f * innerRadius - barWidth);
     add3DRect(0.2f * innerRadius, -0.4f * innerRadius - barWidth, 0.4f * innerRadius + barWidth, -0.2f * innerRadius);
 
-    // ÔÚÃ¿¸ö»­³öµÄÕı·½ĞÎÖĞĞÄ»­Ò»ºáÒ»ÊúµÄÖ±Ïß
-    add3DRect(-0.85f * innerRadius, 0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth); // ÉÏ
-    add3DRect(-0.85f * innerRadius, -0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, -0.6f * innerRadius + 0.5f * barWidth); // ÏÂ
-    add3DRect(-0.6f * innerRadius - 0.5f * barWidth, -0.85f * innerRadius, -0.6f * innerRadius + 0.5f * barWidth, 0.85f * innerRadius); // ×ó
-    add3DRect(0.6f * innerRadius - 0.5f * barWidth, -0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth, 0.85f * innerRadius); // ÓÒ
+    // ï¿½ï¿½Ã¿ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä»ï¿½Ò»ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½Ö±ï¿½ï¿½
+    add3DRect(-0.85f * innerRadius, 0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth); // ï¿½ï¿½
+    add3DRect(-0.85f * innerRadius, -0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, -0.6f * innerRadius + 0.5f * barWidth); // ï¿½ï¿½
+    add3DRect(-0.6f * innerRadius - 0.5f * barWidth, -0.85f * innerRadius, -0.6f * innerRadius + 0.5f * barWidth, 0.85f * innerRadius); // ï¿½ï¿½
+    add3DRect(0.6f * innerRadius - 0.5f * barWidth, -0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth, 0.85f * innerRadius); // ï¿½ï¿½
 
-    // ´ÓÃ¿ÌõĞ±ÏßµÄÖĞµã¿ªÊ¼, ÏòÍâÒıÒ»ÌõÖ±Ïß
-    // (Îª¼ò»¯£¬Í¬ÑùÓÃ½üËÆµÄ¾ØĞÎ±íÊ¾)
-    add3DRect(-0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius + 0.5f * barWidth, 0.96f * innerRadius); // ÉÏ×ó
-    add3DRect(0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, 0.96f * innerRadius); // ÉÏÓÒ
-    add3DRect(-0.3f * innerRadius - 0.5f * barWidth, -0.96f * innerRadius, -0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth); // ÏÂ×ó
-    add3DRect(0.3f * innerRadius - 0.5f * barWidth, -0.96f * innerRadius, 0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth); // ÏÂÓÒ
-    add3DRect(0.3f * innerRadius + 0.5f * barWidth, 0.3f * innerRadius - 0.5f * barWidth, 0.96f * innerRadius, 0.3f * innerRadius + 0.5f * barWidth); // ÓÒÉÏ
-    add3DRect(0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, 0.96f * innerRadius, -0.3f * innerRadius + 0.5f * barWidth); // ÓÒÏÂ
-    add3DRect(-0.96f * innerRadius, 0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth); // ×óÉÏ
-    add3DRect(-0.96f * innerRadius, -0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius + 0.5f * barWidth); // ×óÏÂ
+    // ï¿½ï¿½Ã¿ï¿½ï¿½Ğ±ï¿½ßµï¿½ï¿½Ğµã¿ªÊ¼, ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½Ö±ï¿½ï¿½
+    // (Îªï¿½ò»¯£ï¿½Í¬ï¿½ï¿½ï¿½Ã½ï¿½ï¿½ÆµÄ¾ï¿½ï¿½Î±ï¿½Ê¾)
+    add3DRect(-0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius + 0.5f * barWidth, 0.96f * innerRadius); // ï¿½ï¿½ï¿½ï¿½
+    add3DRect(0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, 0.96f * innerRadius); // ï¿½ï¿½ï¿½ï¿½
+    add3DRect(-0.3f * innerRadius - 0.5f * barWidth, -0.96f * innerRadius, -0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth); // ï¿½ï¿½ï¿½ï¿½
+    add3DRect(0.3f * innerRadius - 0.5f * barWidth, -0.96f * innerRadius, 0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth); // ï¿½ï¿½ï¿½ï¿½
+    add3DRect(0.3f * innerRadius + 0.5f * barWidth, 0.3f * innerRadius - 0.5f * barWidth, 0.96f * innerRadius, 0.3f * innerRadius + 0.5f * barWidth); // ï¿½ï¿½ï¿½ï¿½
+    add3DRect(0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, 0.96f * innerRadius, -0.3f * innerRadius + 0.5f * barWidth); // ï¿½ï¿½ï¿½ï¿½
+    add3DRect(-0.96f * innerRadius, 0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth); // ï¿½ï¿½ï¿½ï¿½
+    add3DRect(-0.96f * innerRadius, -0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius + 0.5f * barWidth); // ï¿½ï¿½ï¿½ï¿½
 
     return vertices;
 }
 
-// Éú³É´øÔ²ĞÎ¿×¶´µÄÇ½±Ú¶¥µã
+// ï¿½ï¿½ï¿½É´ï¿½Ô²ï¿½Î¿×¶ï¿½ï¿½ï¿½Ç½ï¿½Ú¶ï¿½ï¿½ï¿½
 std::vector<float> generateWallWithHoleVertices(float width, float height, float holeRadius, int segments)
 {
     std::vector<float> vertices;
@@ -685,15 +734,15 @@ std::vector<float> generateWallWithHoleVertices(float width, float height, float
         float angle1 = twoPI * static_cast<float>(i) / static_cast<float>(segments);
         float angle2 = twoPI * static_cast<float>(i + 1) / static_cast<float>(segments);
 
-        // ÄÚÈ¦¶¥µã (¶´¿Ú±ßÔµ)
+        // ï¿½ï¿½È¦ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½Ú±ï¿½Ôµ)
         glm::vec3 inner1(holeRadius * cosf(angle1), holeRadius * sinf(angle1), 0.0f);
         glm::vec3 inner2(holeRadius * cosf(angle2), holeRadius * sinf(angle2), 0.0f);
 
-        // ÍâÈ¦¶¥µã (Ç½±Ú±ßÔµ)
-        // Ê¹ÓÃÒ»¸ö×ã¹»´óµÄÍâ½Ó¾ØĞÎÀ´È·¶¨Íâ¶¥µã£¬È»ºó½«Æä²Ã¼ôµ½Ç½µÄÊµ¼Ê±ß½ç
-        float outer_x1 = std::max(-halfW, std::min(halfW, inner1.x * 100)); // ³ËÒÔ´óÊıÒÔÍ¶Éäµ½±ßÔµ
+        // ï¿½ï¿½È¦ï¿½ï¿½ï¿½ï¿½ (Ç½ï¿½Ú±ï¿½Ôµ)
+        // Ê¹ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ã¹»ï¿½ï¿½ï¿½ï¿½ï¿½Ó¾ï¿½ï¿½ï¿½ï¿½ï¿½È·ï¿½ï¿½ï¿½â¶¥ï¿½ã£¬È»ï¿½ï¿½ï¿½ï¿½Ã¼ï¿½ï¿½ï¿½Ç½ï¿½ï¿½Êµï¿½Ê±ß½ï¿½
+        float outer_x1 = std::max(-halfW, std::min(halfW, inner1.x * 100)); // ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½ï¿½ï¿½Í¶ï¿½äµ½ï¿½ï¿½Ôµ
         float outer_y1 = std::max(-halfH, std::min(halfH, inner1.y * 100));
-        // Èç¹ûµãÔÚÇ½½Ç£¬È·±£Ëü¾«È·µØÔÚ½ÇÉÏ
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç½ï¿½Ç£ï¿½È·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½È·ï¿½ï¿½ï¿½Ú½ï¿½ï¿½ï¿½
         if (abs(outer_x1) == halfW && abs(outer_y1) > 0) outer_y1 = (inner1.y > 0) ? halfH : -halfH;
         if (abs(outer_y1) == halfH && abs(outer_x1) > 0) outer_x1 = (inner1.x > 0) ? halfW : -halfW;
         
@@ -706,16 +755,16 @@ std::vector<float> generateWallWithHoleVertices(float width, float height, float
         glm::vec3 outer1(outer_x1, outer_y1, 0.0f);
         glm::vec3 outer2(outer_x2, outer_y2, 0.0f);
         
-        // ·¨Ïß£¬¶ÔÓÚºóÇ½£¬³¯ÏòÕıZÖá
+        // ï¿½ï¿½ï¿½ß£ï¿½ï¿½ï¿½ï¿½Úºï¿½Ç½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Zï¿½ï¿½
         glm::vec3 normal(0.0f, 0.0f, 1.0f);
 
-        // ÓÃÁ½¸öÈı½ÇĞÎ¹¹³ÉÒ»¸öÌİĞÎ
-        // Èı½ÇĞÎ 1
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Î¹ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 1
         vertices.insert(vertices.end(), {inner1.x, inner1.y, inner1.z, normal.x, normal.y, normal.z});
         vertices.insert(vertices.end(), {outer1.x, outer1.y, outer1.z, normal.x, normal.y, normal.z});
         vertices.insert(vertices.end(), {outer2.x, outer2.y, outer2.z, normal.x, normal.y, normal.z});
 
-        // Èı½ÇĞÎ 2
+        // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 2
         vertices.insert(vertices.end(), {inner1.x, inner1.y, inner1.z, normal.x, normal.y, normal.z});
         vertices.insert(vertices.end(), {outer2.x, outer2.y, outer2.z, normal.x, normal.y, normal.z});
         vertices.insert(vertices.end(), {inner2.x, inner2.y, inner2.z, normal.x, normal.y, normal.z});
