@@ -1,1 +1,11 @@
-./vs
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+*.vcxproj.user
+*.ipch
+
+# 大资源文件（如果需要忽略的话）
+resource/15_K/15-K.tif
