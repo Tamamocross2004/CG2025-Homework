@@ -4,6 +4,11 @@
 
 TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath, const char* normalPath) {
     baseHeight = 0.1f;
+    // 保存地形尺寸信息
+    terrainWidth = width;
+    terrainDepth = depth;
+    terrainResolution = resolution;
+
     generateMesh(width, depth, resolution, method, heightmapPath);
     setupMesh();
     if(diffusePath) {
@@ -31,6 +36,7 @@ TerrainSandbox::~TerrainSandbox(){
 }
 
 void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenMethod method, const char* heightmapPath) {
+    // 生成地形网格的顶点位置的UV
     std::vector<glm::vec3> positions;
     std::vector<glm::vec2> uvs;
     std::vector<glm::vec3> normals;
@@ -44,6 +50,9 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
             uvs.push_back(glm::vec2((float)j / resolution, (float)i / resolution));
         }
     }
+
+    // 保存地形顶点位置用于高度查询
+    this->terrainPositions = positions;
 
     // 根据方法设置高度 (Y坐标)
     if (method == GenMethod::HEIGHTMAP && heightmapPath != nullptr) {
@@ -86,6 +95,9 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
     }
     indexCount = indices.size();
 
+    // 更新保存的地形顶点位置
+    this->terrainPositions = positions;
+
     // 计算法线
     normals.resize(positions.size(), glm::vec3(0.0f));
     for (size_t i = 0; i < indices.size(); i += 3) {
@@ -113,81 +125,67 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         vertices.push_back(uvs[i].y);
     }
 
-    // --- 在这里添加生成底座的代码 ---
+    // 生成底座
     float halfW = width / 2.0f;
     float halfD = depth / 2.0f;
-    unsigned int baseVertexOffset = positions.size(); // 地形顶点之后的偏移量
-
-    // 底座的顶点位置
-    std::vector<glm::vec3> base_positions = {
-        // 底面 (y = -baseHeight)
-        { halfW, -baseHeight,  halfD}, {-halfW, -baseHeight,  halfD}, {-halfW, -baseHeight, -halfD}, { halfW, -baseHeight, -halfD},
-        // 前侧面 (z = halfD)
-        { halfW,  0.0f,  halfD}, {-halfW,  0.0f,  halfD},
-        // 后侧面 (z = -halfD)
-        {-halfW,  0.0f, -halfD}, { halfW,  0.0f, -halfD},
-        // 右侧面 (x = halfW)
-        { halfW,  0.0f, -halfD},
-        // 左侧面 (x = -halfW)
-        {-halfW,  0.0f,  halfD}
-    };
-
-    // 底座的索引
-    std::vector<unsigned int> base_indices = {
-        // 底面
-        baseVertexOffset + 0, baseVertexOffset + 1, baseVertexOffset + 2, 
-        baseVertexOffset + 0, baseVertexOffset + 2, baseVertexOffset + 3,
-        // 前侧面
-        baseVertexOffset + 4, baseVertexOffset + 1, baseVertexOffset + 5, 
-        baseVertexOffset + 4, baseVertexOffset + 0, baseVertexOffset + 1,
-        // 后侧面
-        baseVertexOffset + 6, baseVertexOffset + 3, baseVertexOffset + 7, 
-        baseVertexOffset + 6, baseVertexOffset + 2, baseVertexOffset + 3,
-        // 右侧面
-        baseVertexOffset + 8, baseVertexOffset + 0, baseVertexOffset + 3, 
-        baseVertexOffset + 8, baseVertexOffset + 4, baseVertexOffset + 0,
-        // 左侧面
-        baseVertexOffset + 9, baseVertexOffset + 2, baseVertexOffset + 1, 
-        baseVertexOffset + 9, baseVertexOffset + 6, baseVertexOffset + 2
-    };
-
-    // 底座的法线
-    std::vector<glm::vec3> base_normals;
-    base_normals.resize(base_positions.size(), glm::vec3(0.0f));
-    for (size_t i = 0; i < base_indices.size(); i += 3) {
-        glm::vec3 p1 = base_positions[base_indices[i] - baseVertexOffset];
-        glm::vec3 p2 = base_positions[base_indices[i + 1] - baseVertexOffset];
-        glm::vec3 p3 = base_positions[base_indices[i + 2] - baseVertexOffset];
-        glm::vec3 normal = glm::normalize(glm::cross(p2 - p1, p3 - p1));
-        base_normals[base_indices[i] - baseVertexOffset] += normal;
-        base_normals[base_indices[i + 1] - baseVertexOffset] += normal;
-        base_normals[base_indices[i + 2] - baseVertexOffset] += normal;
-    }
-    for (auto& n : base_normals) {
-        n = glm::normalize(n);
-    }
     
-    // 底座的UVs (简单映射)
-    std::vector<glm::vec2> base_uvs = {
-        {1.0f, 1.0f}, {0.0f, 1.0f}, {0.0f, 0.0f}, {1.0f, 0.0f}, // 底面
-        {1.0f, 1.0f}, {0.0f, 1.0f}, // 前侧面
-        {0.0f, 0.0f}, {1.0f, 0.0f}, // 后侧面
-        {1.0f, 0.0f}, // 右侧面
-        {0.0f, 1.0f}  // 左侧面
+    // 1. 生成底座的底面 (这部分不变)
+    unsigned int baseVertexOffset = vertices.size() / 8; // 当前顶点总数
+    // 底面顶点
+    vertices.insert(vertices.end(), { halfW, -baseHeight,  halfD, 0, -1, 0, 1, 1 });
+    vertices.insert(vertices.end(), {-halfW, -baseHeight,  halfD, 0, -1, 0, 0, 1 });
+    vertices.insert(vertices.end(), {-halfW, -baseHeight, -halfD, 0, -1, 0, 0, 0 });
+    vertices.insert(vertices.end(), { halfW, -baseHeight, -halfD, 0, -1, 0, 1, 0 });
+    // 底面索引
+    indices.push_back(baseVertexOffset + 0);
+    indices.push_back(baseVertexOffset + 1);
+    indices.push_back(baseVertexOffset + 2);
+    indices.push_back(baseVertexOffset + 0);
+    indices.push_back(baseVertexOffset + 2);
+    indices.push_back(baseVertexOffset + 3);
+
+    // 2. 生成连接地形边缘和底座的侧壁 ("幕墙")
+    auto addSideWall = [&](int idx1, int idx2, const glm::vec3& normal) {
+        unsigned int currentOffset = vertices.size() / 8;
+        
+        // 获取地形边缘的两个顶点
+        glm::vec3 p_top1 = positions[idx1];
+        glm::vec3 p_top2 = positions[idx2];
+        glm::vec2 uv1 = uvs[idx1];
+        glm::vec2 uv2 = uvs[idx2];
+
+        // 计算对应的底部顶点
+        glm::vec3 p_bottom1 = {p_top1.x, -baseHeight, p_top1.z};
+        glm::vec3 p_bottom2 = {p_top2.x, -baseHeight, p_top2.z};
+
+        // 添加4个顶点构成一个四边形
+        vertices.insert(vertices.end(), { p_top1.x, p_top1.y, p_top1.z, normal.x, normal.y, normal.z, uv1.x, uv1.y });
+        vertices.insert(vertices.end(), { p_bottom1.x, p_bottom1.y, p_bottom1.z, normal.x, normal.y, normal.z, uv1.x, 0.0f }); // UV的V坐标设为0
+        vertices.insert(vertices.end(), { p_bottom2.x, p_bottom2.y, p_bottom2.z, normal.x, normal.y, normal.z, uv2.x, 0.0f });
+        vertices.insert(vertices.end(), { p_top2.x, p_top2.y, p_top2.z, normal.x, normal.y, normal.z, uv2.x, uv2.y });
+
+        // 添加索引
+        indices.push_back(currentOffset + 0);
+        indices.push_back(currentOffset + 1);
+        indices.push_back(currentOffset + 2);
+        indices.push_back(currentOffset + 0);
+        indices.push_back(currentOffset + 2);
+        indices.push_back(currentOffset + 3);
     };
 
-    // 将底座数据合并到主顶点和索引列表中
-    for (size_t i = 0; i < base_positions.size(); ++i) {
-        vertices.push_back(base_positions[i].x);
-        vertices.push_back(base_positions[i].y);
-        vertices.push_back(base_positions[i].z);
-        vertices.push_back(base_normals[i].x);
-        vertices.push_back(base_normals[i].y);
-        vertices.push_back(base_normals[i].z);
-        vertices.push_back(base_uvs[i].x);
-        vertices.push_back(base_uvs[i].y);
+    int res = resolution;
+    // 生成四个侧壁
+    for (int i = 0; i < res; ++i) {
+        // 后侧壁 (z = -halfD)
+        addSideWall(i, i + 1, glm::vec3(0, 0, -1));
+        // 前侧壁 (z = halfD)
+        addSideWall((res * (res + 1)) + i + 1, (res * (res + 1)) + i, glm::vec3(0, 0, 1));
+        // 左侧壁 (x = -halfW)
+        addSideWall((i * (res + 1)), ((i + 1) * (res + 1)), glm::vec3(-1, 0, 0));
+        // 右侧壁 (x = halfW)
+        addSideWall(((i + 1) * (res + 1)) + res, (i * (res + 1)) + res, glm::vec3(1, 0, 0));
     }
-    indices.insert(indices.end(), base_indices.begin(), base_indices.end());
+
     indexCount = indices.size();
 }
 
@@ -269,4 +267,48 @@ unsigned int TerrainSandbox::loadTexture(const char* path) {
     }
 
     return textureID;
+}
+
+// getHeight 函数的实现
+float barryCentric(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec2 pos) {
+    float det = (p2.z - p3.z) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.z - p3.z);
+    float l1 = ((p2.z - p3.z) * (pos.x - p3.x) + (p3.x - p2.x) * (pos.y - p3.z)) / det;
+    float l2 = ((p3.z - p1.z) * (pos.x - p3.x) + (p1.x - p3.x) * (pos.y - p3.z)) / det;
+    float l3 = 1.0f - l1 - l2;
+    return l1 * p1.y + l2 * p2.y + l3 * p3.y;
+}
+
+float TerrainSandbox::getHeight(float worldX, float worldZ) {
+    // 将世界坐标转换为地形的局部坐标 (0-1范围)
+    float terrainX = (worldX / terrainWidth) + 0.5f;
+    float terrainZ = (worldZ / terrainDepth) + 0.5f;
+
+    // 如果在地形范围外，返回一个很低的值
+    if (terrainX < 0 || terrainX > 1 || terrainZ < 0 || terrainZ > 1) {
+        return -1000.0f;
+    }
+
+    // 计算在哪个网格单元
+    float gridSquareSizeX = 1.0f / terrainResolution;
+    float gridSquareSizeZ = 1.0f / terrainResolution;
+    int gridX = static_cast<int>(floor(terrainX / gridSquareSizeX));
+    int gridZ = static_cast<int>(floor(terrainZ / gridSquareSizeZ));
+
+    // 计算在单元格内的坐标 (0-1范围)
+    float xCoord = fmod(terrainX, gridSquareSizeX) / gridSquareSizeX;
+    float zCoord = fmod(terrainZ, gridSquareSizeZ) / gridSquareSizeZ;
+
+    // 获取四个角的顶点
+    int res = terrainResolution;
+    glm::vec3 p1 = terrainPositions[(gridZ * (res + 1)) + gridX];
+    glm::vec3 p2 = terrainPositions[(gridZ * (res + 1)) + gridX + 1];
+    glm::vec3 p3 = terrainPositions[((gridZ + 1) * (res + 1)) + gridX];
+    glm::vec3 p4 = terrainPositions[((gridZ + 1) * (res + 1)) + gridX + 1];
+
+    // 根据在哪个三角形中进行重心插值
+    if (xCoord + zCoord < 1) { // 左上三角形
+        return barryCentric(p1, p2, p3, glm::vec2(worldX, worldZ));
+    } else { // 右下三角形
+        return barryCentric(p2, p4, p3, glm::vec2(worldX, worldZ));
+    }
 }

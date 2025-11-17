@@ -24,6 +24,13 @@ public:
     // 绘制沙盘
     void Draw(Shader& shader);
 
+    // 根据世界坐标获取地形高度
+    float getHeight(float worldX, float worldZ);
+
+    // 获取地形尺寸
+    float getTerrainWidth() const { return terrainWidth; }
+    float getTerrainDepth() const { return terrainDepth; }
+
 private:
     unsigned int VAO, VBO, EBO;
     std::vector<float> vertices;
@@ -32,6 +39,12 @@ private:
     unsigned int normalTexture;
     int indexCount;
     float baseHeight;
+
+    // 存储地形尺寸和顶点数据以供查询
+    float terrainWidth;
+    float terrainDepth;
+    int terrainResolution;
+    std::vector<glm::vec3> terrainPositions;
 
     // 生成顶点数据
     void generateMesh(float width, float depth, int resolution, GenMethod method, const char* heightmapPath);

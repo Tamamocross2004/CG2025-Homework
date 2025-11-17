@@ -10,6 +10,7 @@
 // #define STB_IMAGE_IMPLEMENTATION
 #include "model.h"
 #include "sandbox_mesh.h"
+#include "particle_system.h"
 #include "stb_image.h"
 
 #include <iostream>
@@ -43,6 +44,8 @@ bool firstMouse = true;
 bool isCloudVisible = false;
 glm::vec3 cloudPositionOffset(0.0f, 1.0f, 0.0f); // 云相对于沙盘中心的偏移
 bool mKeyPressed = false; // 用于防止长按M键时快速切换
+bool isRaining = false;
+bool rKeyPressed = false;
 
 // ʱ������
 float deltaTime = 0.0f;
@@ -118,13 +121,16 @@ int main()
         "resource/textures/red_sand_disp_4k.png" // 法线/灰度图路径
     );
 
-    // 方法2：程序化随机生成
-    TerrainSandbox sandbox_procedural(
-        1.5f, 1.0f, 64,
-        TerrainSandbox::GenMethod::PROCEDURAL_RANDOM,
-        nullptr,
-        "resource/textures/red_sand_diff_4k.jpg"
-    );
+    // // 方法2：程序化随机生成
+    // TerrainSandbox sandbox_procedural(
+    //     1.5f, 1.0f, 64,
+    //     TerrainSandbox::GenMethod::PROCEDURAL_RANDOM,
+    //     nullptr,
+    //     "resource/textures/red_sand_diff_4k.jpg"
+    // );
+
+    // --- 初始化雨滴粒子系统 ---
+    ParticleSystem rainSystem(2000, &sandbox_heightmap); // 创建粒子系统实例
 
     // --- 加载云纹理 ---
     unsigned int cloudTexture;
@@ -312,7 +318,7 @@ int main()
 
         // 整体光照强度
         glm::vec3 warmColor(1.0f, 0.85f, 0.6f);
-        float overallIntensity = 0.8f; // 整体亮度
+        float overallIntensity = 1.0f; // 整体亮度
         glm::vec3 finalLightColor = warmColor * overallIntensity;
 
         // ȷ�������� Uniforms/Drawing ����ʱ���� Shader
@@ -511,6 +517,9 @@ int main()
         }
 
         // --- 绘制雨云 (如果可见) ---
+        glm::vec3 sandboxWorldPos = glm::vec3(0.5f, -1.4f, -3.0f);
+        glm::vec3 cloudWorldCenter = sandboxWorldPos + cloudPositionOffset;
+
         if (isCloudVisible)
         {
             // 启用混合以支持透明度
@@ -558,7 +567,16 @@ int main()
 
             // 绘制完毕后禁用混合，以免影响其他物体
             glDisable(GL_BLEND);
+
+            // --- 更新和绘制雨滴 ---
+            if (isRaining)
+            {
+                rainSystem.Update(deltaTime, cloudWorldCenter, sandboxWorldPos);
+                rainSystem.Draw(view, projection);
+            }
         }
+
+
 
         // glfw����������������ѯ IO �¼�������/�ͷż����ƶ����ȣ�
         // -------------------------------------------------------------------------------
@@ -614,6 +632,18 @@ void processInput(GLFWwindow* window)
         mKeyPressed = false;
     }
 
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS && !rKeyPressed)
+    {
+        if (isCloudVisible) { // 只有云可见时才能下雨
+            isRaining = !isRaining;
+        }
+        rKeyPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_R) == GLFW_RELEASE)
+    {
+        rKeyPressed = false;
+    }
+
     // 移动雨云
     if (isCloudVisible)
     {
@@ -627,6 +657,7 @@ void processInput(GLFWwindow* window)
         if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
             cloudPositionOffset.x += cloudSpeed;
     }
+
 }
 
 // glfw��ÿ�����ڴ�С�����仯��ͨ������ϵͳ���û�������С��ʱ���˻ص���������ִ��
