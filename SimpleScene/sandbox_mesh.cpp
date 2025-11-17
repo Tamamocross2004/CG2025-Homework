@@ -2,7 +2,7 @@
 // #define STB_IMAGE_IMPLEMENTATION 
 #include "stb_image.h"           
 
-TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath) {
+TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath, const char* normalPath) {
     baseHeight = 0.1f;
     generateMesh(width, depth, resolution, method, heightmapPath);
     setupMesh();
@@ -10,6 +10,11 @@ TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMeth
         diffuseTexture = loadTexture(diffusePath);
     } else {
         diffuseTexture = 0;
+    }
+    if(normalPath) {
+        normalTexture = loadTexture(normalPath);
+    } else {
+        normalTexture = 0;
     }
 }
 
@@ -19,6 +24,9 @@ TerrainSandbox::~TerrainSandbox(){
     glDeleteBuffers(1, &EBO);
     if(diffuseTexture != 0){
         glDeleteTextures(1, &diffuseTexture);
+    }
+    if(normalTexture != 0){
+        glDeleteTextures(1, &normalTexture);
     }
 }
 
@@ -212,10 +220,17 @@ void TerrainSandbox::setupMesh() {
 
 void TerrainSandbox::Draw(Shader& shader) {
     shader.use();
-    if (diffuseTexture != 0) {
-        glActiveTexture(GL_TEXTURE0);
-        shader.setInt("texture_diffuse1", 0);
-        glBindTexture(GL_TEXTURE_2D, diffuseTexture);
+    
+    // 绑定漫反射纹理到纹理单元 0
+    glActiveTexture(GL_TEXTURE0);
+    shader.setInt("texture_diffuse1", 0);
+    glBindTexture(GL_TEXTURE_2D, diffuseTexture);
+
+    // 绑定法线贴图到纹理单元 1
+    if (normalTexture != 0) {
+        glActiveTexture(GL_TEXTURE1);
+        shader.setInt("texture_normal1", 1);
+        glBindTexture(GL_TEXTURE_2D, normalTexture);
     }
 
     glBindVertexArray(VAO);

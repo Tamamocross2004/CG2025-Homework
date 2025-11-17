@@ -39,6 +39,11 @@ float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
 bool firstMouse = true;
 
+// 雨云状态
+bool isCloudVisible = false;
+glm::vec3 cloudPositionOffset(0.0f, 1.0f, 0.0f); // 云相对于沙盘中心的偏移
+bool mKeyPressed = false; // 用于防止长按M键时快速切换
+
 // ʱ������
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
@@ -95,7 +100,8 @@ int main()
     Shader lightCubeShader("lightcube.vs", "lightcube.fs");
     Shader modelShader("model_loading.vs", "model_loading.fs");
     Shader sandboxShader("sandbox.vs", "sandbox.fs");
-    
+    Shader cloudShader("cloud.vs", "cloud.fs");
+
     // --- 加载模型 ---
     Model ourModel("resource/model/table3.obj");
     Model lampModel("resource/lamp/lamp1.obj");
@@ -108,7 +114,8 @@ int main()
         128,  // 网格精度
         TerrainSandbox::GenMethod::HEIGHTMAP,
         "resource/textures/heightmap1.png", // 高度图路径
-        "resource/textures/red_sand_diff_4k.jpg"  // 沙子纹理路径
+        "resource/textures/red_sand_diff_4k.jpg",  // 沙子纹理路径
+        "resource/textures/red_sand_disp_4k.png" // 法线/灰度图路径
     );
 
     // 方法2：程序化随机生成
@@ -119,6 +126,55 @@ int main()
         "resource/textures/red_sand_diff_4k.jpg"
     );
 
+    // --- 加载云纹理 ---
+    unsigned int cloudTexture;
+    glGenTextures(1, &cloudTexture);
+    glBindTexture(GL_TEXTURE_2D, cloudTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int width, height, nrChannels;
+    unsigned char *data = stbi_load("resource/textures/cloud.png", &width, &height, &nrChannels, 0);
+    if (data)
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    }
+    else
+    {
+        std::cout << "Failed to load cloud texture" << std::endl;
+    }
+    stbi_image_free(data);
+
+    // --- 创建云的平面顶点 ---
+    float cloudVertices[] = {
+        // positions         // texture Coords
+        -1.0f, 0.0f, -0.5f,  0.0f, 1.0f,
+         1.0f, 0.0f, -0.5f,  1.0f, 1.0f,
+         1.0f, 0.0f,  0.5f,  1.0f, 0.0f,
+        -1.0f, 0.0f,  0.5f,  0.0f, 0.0f
+    };
+    unsigned int cloudIndices[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+    unsigned int cloudVAO, cloudVBO, cloudEBO;
+    glGenVertexArrays(1, &cloudVAO);
+    glGenBuffers(1, &cloudVBO);
+    glGenBuffers(1, &cloudEBO);
+    glBindVertexArray(cloudVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, cloudVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cloudVertices), cloudVertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, cloudEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(cloudIndices), cloudIndices, GL_STATIC_DRAW);
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    // Texture coord attribute
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glBindVertexArray(0);
 
     // ͳһ�����õ���������Ϣ(ÿһ��ǰ��������Ϊ������꣬������Ϊ������)
     // ------------------------------------------------------------------
@@ -254,9 +310,9 @@ int main()
         // ��Դλ�ù̶���̨�ƴ�
         glm::vec3 lampLightPos = glm::vec3(-1.0f, -1.1f, -2.5f);
 
-        // ����谵��ůɫ��Ļ�����ɫ��ǿ��
+        // 整体光照强度
         glm::vec3 warmColor(1.0f, 0.85f, 0.6f);
-        float overallIntensity = 0.6f; // ������������
+        float overallIntensity = 0.8f; // 整体亮度
         glm::vec3 finalLightColor = warmColor * overallIntensity;
 
         // ȷ�������� Uniforms/Drawing ����ʱ���� Shader
@@ -454,7 +510,55 @@ int main()
             // sandbox_procedural.Draw(sandboxShader);
         }
 
+        // --- 绘制雨云 (如果可见) ---
+        if (isCloudVisible)
+        {
+            // 启用混合以支持透明度
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+            cloudShader.use();
+            cloudShader.setMat4("projection", projection);
+            cloudShader.setMat4("view", view);
+
+            // 绑定云纹理 (只需要绑定一次)
+            glActiveTexture(GL_TEXTURE0);
+            cloudShader.setInt("cloudTexture", 0);
+            glBindTexture(GL_TEXTURE_2D, cloudTexture);
+
+            // --- 使用分层渲染来增加云的厚度 ---
+            const int numCloudLayers = 10; // 定义云的层数
+            const float layerSpacing = 0.01f; // 定义每层之间的间距
+
+            // 计算云的基础位置和缩放
+            glm::vec3 sandboxBasePos = glm::vec3(0.5f, -1.4f, -3.0f);
+            glm::mat4 baseModel = glm::mat4(1.0f);
+            baseModel = glm::translate(baseModel, sandboxBasePos + cloudPositionOffset);
+            baseModel = glm::scale(baseModel, glm::vec3(0.5f)); // 调整云的大小
+            baseModel = glm::rotate(baseModel, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+
+            glBindVertexArray(cloudVAO);
+
+            for (int i = 0; i < numCloudLayers; ++i)
+            {
+                // 为当前层计算模型矩阵
+                glm::mat4 layerModel = glm::translate(baseModel, glm::vec3(0.0f, i * layerSpacing, 0.0f));
+                cloudShader.setMat4("model", layerModel);
+
+                // 为当前层计算纹理偏移，制造视差效果
+                // 这里的偏移量可以根据喜好调整
+                float offsetFactor = static_cast<float>(i) / static_cast<float>(numCloudLayers);
+                cloudShader.setVec2("texOffset", glm::vec2(offsetFactor * 0.1f, offsetFactor * 0.1f));
+
+                // 绘制当前层
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            }
+
+            glBindVertexArray(0);
+
+            // 绘制完毕后禁用混合，以免影响其他物体
+            glDisable(GL_BLEND);
+        }
 
         // glfw����������������ѯ IO �¼�������/�ͷż����ƶ����ȣ�
         // -------------------------------------------------------------------------------
@@ -468,9 +572,12 @@ int main()
     glDeleteVertexArrays(1, &lightCubeVAO);
     glDeleteVertexArrays(1, &windowVAO);
     glDeleteVertexArrays(1, &wallVAO);
+    glDeleteVertexArrays(1, &cloudVAO); // <-- 清理云VAO
     glDeleteBuffers(1, &roomVBO);
     glDeleteBuffers(1, &windowVBO);
     glDeleteBuffers(1, &wallVBO);
+    glDeleteBuffers(1, &cloudVBO); // <-- 清理云VBO
+    glDeleteBuffers(1, &cloudEBO); // <-- 清理云EBO
 
     // glfw����ֹ�����������ǰ����� GLFW ��Դ��
     // ------------------------------------------------------------------
@@ -485,6 +592,7 @@ void processInput(GLFWwindow* window)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
+    // 相机移动
     if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
         camera.ProcessKeyboard(FORWARD, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
@@ -493,6 +601,32 @@ void processInput(GLFWwindow* window)
         camera.ProcessKeyboard(LEFT, deltaTime);
     if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
         camera.ProcessKeyboard(RIGHT, deltaTime);
+
+    // 雨云控制
+    // 切换雨云可见性
+    if (glfwGetKey(window, GLFW_KEY_M) == GLFW_PRESS && !mKeyPressed)
+    {
+        isCloudVisible = !isCloudVisible;
+        mKeyPressed = true;
+    }
+    if (glfwGetKey(window, GLFW_KEY_M) == GLFW_RELEASE)
+    {
+        mKeyPressed = false;
+    }
+
+    // 移动雨云
+    if (isCloudVisible)
+    {
+        float cloudSpeed = 1.0f * deltaTime;
+        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+            cloudPositionOffset.z -= cloudSpeed;
+        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+            cloudPositionOffset.z += cloudSpeed;
+        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+            cloudPositionOffset.x -= cloudSpeed;
+        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+            cloudPositionOffset.x += cloudSpeed;
+    }
 }
 
 // glfw��ÿ�����ڴ�С�����仯��ͨ������ϵͳ���û�������С��ʱ���˻ص���������ִ��

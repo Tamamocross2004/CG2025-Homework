@@ -17,7 +17,7 @@ public:
     };
 
     // 构造函数
-    TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath = nullptr, const char* diffusePath = nullptr);
+    TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath = nullptr, const char* diffusePath = nullptr, const char* normalPath = nullptr);
     // 析构函数
     ~TerrainSandbox();
 
@@ -29,9 +29,10 @@ private:
     std::vector<float> vertices;
     std::vector<unsigned int> indices;
     unsigned int diffuseTexture;
+    unsigned int normalTexture;
     int indexCount;
     float baseHeight;
-    
+
     // 生成顶点数据
     void generateMesh(float width, float depth, int resolution, GenMethod method, const char* heightmapPath);
     // 设置OpenGL缓冲
