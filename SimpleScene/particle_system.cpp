@@ -31,9 +31,15 @@ ParticleSystem::~ParticleSystem() {
 
 void ParticleSystem::resetParticle(Particle& particle, const glm::vec3& cloudCenter) {
     // 在云的范围内随机生成位置
-    float randX = glm::linearRand(-0.5f, 0.5f);    // X轴范围
-    float randZ = glm::linearRand(-0.25f, 0.25f); // Z轴范围
-    particle.position = cloudCenter + glm::vec3(randX, 0.0f, randZ);
+    // 将X轴范围扩大以匹配云的宽度
+    float randX = glm::linearRand(-1.0f, 1.0f);
+    float randZ = glm::linearRand(-0.5f, 0.5f);
+    
+    // 记录这个随机偏移
+    particle.initialOffset = glm::vec3(randX, 0.0f, randZ);
+    
+    // 设置初始位置
+    particle.position = cloudCenter + particle.initialOffset;
 
     // 设置一个随机的下落速度
     float gravity = 9.8f;
@@ -46,8 +52,15 @@ void ParticleSystem::Update(float dt, const glm::vec3& cloudCenter, const glm::v
         if(p.life <= 0.0f){
             resetParticle(p, cloudCenter);
         }
-        // 更新位置
-        p.position += p.velocity * dt;
+        
+        // 粒子的水平位置 = 当前云的中心 + 它的初始随机偏移
+        p.position.x = cloudCenter.x + p.initialOffset.x;
+        p.position.z = cloudCenter.z + p.initialOffset.z;
+
+        // 只更新Y轴的下落
+        p.position.y += p.velocity.y * dt;
+
+
 
         // 碰撞检测
         // 将雨滴的世界坐标转换为沙盘的局部坐标

@@ -10,7 +10,8 @@
 struct Particle {
     glm::vec3 position;
     glm::vec3 velocity;
-    float life; // 暂时不用
+    float life;
+    glm::vec3 initialOffset; // 存储粒子相对于云中心的初始偏移
 };
 
 // 粒子系统类

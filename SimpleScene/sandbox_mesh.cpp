@@ -283,20 +283,24 @@ float TerrainSandbox::getHeight(float worldX, float worldZ) {
     float terrainX = (worldX / terrainWidth) + 0.5f;
     float terrainZ = (worldZ / terrainDepth) + 0.5f;
 
-    // 如果在地形范围外，返回一个很低的值
-    if (terrainX < 0 || terrainX > 1 || terrainZ < 0 || terrainZ > 1) {
-        return -1000.0f;
+    // 增加严格的边界检查
+    // 如果粒子在地形的XZ范围之外，直接返回一个极低的高度，避免后续计算崩溃
+    if (terrainX < 0.0f || terrainX > 1.0f || terrainZ < 0.0f || terrainZ > 1.0f) {
+        return -1000.0f; // 返回一个安全值
     }
 
     // 计算在哪个网格单元
-    float gridSquareSizeX = 1.0f / terrainResolution;
-    float gridSquareSizeZ = 1.0f / terrainResolution;
-    int gridX = static_cast<int>(floor(terrainX / gridSquareSizeX));
-    int gridZ = static_cast<int>(floor(terrainZ / gridSquareSizeZ));
+    int gridX = static_cast<int>(floor(terrainX * terrainResolution));
+    int gridZ = static_cast<int>(floor(terrainZ * terrainResolution));
+
+    // --- 增加索引安全检查 ---
+    if (gridX >= terrainResolution || gridZ >= terrainResolution || gridX < 0 || gridZ < 0) {
+        return -1000.0f;
+    }
 
     // 计算在单元格内的坐标 (0-1范围)
-    float xCoord = fmod(terrainX, gridSquareSizeX) / gridSquareSizeX;
-    float zCoord = fmod(terrainZ, gridSquareSizeZ) / gridSquareSizeZ;
+    float xCoord = fmod(terrainX * terrainResolution, 1.0f);
+    float zCoord = fmod(terrainZ * terrainResolution, 1.0f);
 
     // 获取四个角的顶点
     int res = terrainResolution;

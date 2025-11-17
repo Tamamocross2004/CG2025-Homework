@@ -316,8 +316,9 @@ int main()
         // --- 定义场景原点，将所有物体移动到房子中心 ---
         glm::vec3 sceneOrigin = glm::vec3(0.0f, 0.0f, 0.0f); 
 
-        // 光源位置固定在台灯处
-        glm::vec3 lampLightPos = glm::vec3(-1.0f, -1.1f, -2.5f);
+        // 将光源移动到房间正上方
+        glm::vec3 lightPos = glm::vec3(0.0f, 2.5f, 0.0f);
+
 
         // 整体光照强度
         glm::vec3 warmColor(1.0f, 0.85f, 0.6f);
@@ -327,7 +328,7 @@ int main()
         // 确保在设置 Uniforms/Drawing 之前激活 Shader
         //---------------------------------------------------------------------
         lightingShader.use();
-        lightingShader.setVec3("lightPos", lampLightPos);
+        lightingShader.setVec3("lightPos", lightPos); // <--- 使用新的光源位置
         lightingShader.setVec3("viewPos", camera.Position);
         lightingShader.setVec3("lightColor", finalLightColor);
 
@@ -450,19 +451,19 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, windowVertexCount); 
         }
 
-        // // 绘制灯
-        // {
-        //     lightCubeShader.use();
-        //     lightCubeShader.setMat4("projection", projection);
-        //     lightCubeShader.setMat4("view", view);
-        //     model = glm::mat4(1.0f);
-        //     model = glm::translate(model, lightPos);
-        //     model = glm::scale(model, glm::vec3(0.2f)); // a smaller cube
-        //     lightCubeShader.setMat4("model", model);
+        // 绘制灯
+        {
+            lightCubeShader.use();
+            lightCubeShader.setMat4("projection", projection);
+            lightCubeShader.setMat4("view", view);
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, lightPos);
+            model = glm::scale(model, glm::vec3(0.2f)); // a smaller cube
+            lightCubeShader.setMat4("model", model);
 
-        //     glBindVertexArray(lightCubeVAO);
-        //     glDrawArrays(GL_TRIANGLES, 0, 36);
-        // }
+            glBindVertexArray(lightCubeVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
 
         // --- 绘制书桌模型 ---
         {
@@ -472,7 +473,7 @@ int main()
 
             // 设置光照
             modelShader.setVec3("viewPos", camera.Position);
-            modelShader.setVec3("light.position", lampLightPos);
+            modelShader.setVec3("light.position", lightPos); // <--- 使用新的光源位置
             modelShader.setVec3("light.ambient", finalLightColor * 0.2f);
             modelShader.setVec3("light.diffuse", finalLightColor);
             modelShader.setVec3("light.specular", finalLightColor * 0.2f);
@@ -493,7 +494,8 @@ int main()
             modelShader.use(); 
             model = glm::mat4(1.0f);
             // 把台灯移动到桌子上的一个偏左位置
-            model = glm::translate(model, sceneOrigin + glm::vec3(-1.0f, -0.8f, -0.5f));
+            glm::vec3 lampModelWorldPos = sceneOrigin + glm::vec3(-1.0f, -0.8f, -0.5f);
+            model = glm::translate(model, lampModelWorldPos); // 使用计算好的世界坐标
             model = glm::scale(model, glm::vec3(0.3f)); // 调整台灯使尺寸合适
             modelShader.setMat4("model", model);
             lampModel.Draw(modelShader);
@@ -506,7 +508,7 @@ int main()
             sandboxShader.setMat4("projection", projection);
             sandboxShader.setMat4("view", view);
             sandboxShader.setVec3("viewPos", camera.Position);
-            sandboxShader.setVec3("lightPos", lampLightPos);
+            sandboxShader.setVec3("lightPos", lightPos); // <--- 使用新的光源位置
             sandboxShader.setVec3("lightColor", finalLightColor);
 
             model = glm::mat4(1.0f);
@@ -520,7 +522,9 @@ int main()
         }
 
         // --- 绘制雨云 (如果可见) ---
-        glm::vec3 sandboxWorldPos = glm::vec3(0.5f, -1.4f, -3.0f);
+        // 沙盘的世界位置应该只在这里定义一次
+        glm::vec3 sandboxWorldPos = sceneOrigin + glm::vec3(0.5f, -1.4f, -1.0f);
+        // 云的世界中心位置，Y值基于沙盘和云的偏移量
         glm::vec3 cloudWorldCenter = sandboxWorldPos + cloudPositionOffset;
 
         if (isCloudVisible)
@@ -545,9 +549,9 @@ int main()
             // 计算云的基础位置和缩放
             glm::vec3 sandboxBasePos = sceneOrigin + glm::vec3(0.5f, -1.4f, -0.5f);
             glm::mat4 baseModel = glm::mat4(1.0f);
-            baseModel = glm::translate(baseModel, sandboxBasePos + cloudPositionOffset);
-            baseModel = glm::scale(baseModel, glm::vec3(0.5f)); // 调整云的大小
-            baseModel = glm::rotate(baseModel, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            baseModel = glm::translate(baseModel, sandboxWorldPos + cloudPositionOffset);
+            baseModel = glm::scale(baseModel, glm::vec3(1.0f)); // 调整云的大小
+            // baseModel = glm::rotate(baseModel, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
             glBindVertexArray(cloudVAO);
 
@@ -671,7 +675,6 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
     // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
 }
-
 
 // glfw: whenever the mouse moves, this callback is called
 // -------------------------------------------------------
