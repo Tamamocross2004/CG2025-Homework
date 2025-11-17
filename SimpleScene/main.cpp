@@ -25,16 +25,16 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow* window);
-// ������ʽ�οմ�
+// 生成窗户样式的顶点
 std::vector<float> generateCircularWindowVertices(int segments, float outerRadius, float innerRadius, float barWidth, float depth);
-// ���ɴ���ǽ��
+// 生成带洞的墙壁
 std::vector<float> generateWallWithHoleVertices(float width, float height, float holeRadius, int segments);
 
-// ��������
+// 屏幕设置
 const unsigned int SCR_WIDTH = 1600;
 const unsigned int SCR_HEIGHT = 1200;
 
-// ���������
+// 相机
 Camera camera(glm::vec3(0.0f, 0.0f, 5.0f));
 float lastX = SCR_WIDTH / 2.0f;
 float lastY = SCR_HEIGHT / 2.0f;
@@ -47,16 +47,16 @@ bool mKeyPressed = false; // 用于防止长按M键时快速切换
 bool isRaining = false;
 bool rKeyPressed = false;
 
-// ʱ������
+// 时间管理
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-// ��������
+// 灯光位置
 glm::vec3 lightPos(0.0f, 2.5f, 3.0f);
 
 int main()
 {
-    // ��ʼ��������glfw
+    // 初始化并配置glfw
     // ------------------------------
     glfwInit();
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
@@ -67,7 +67,7 @@ int main()
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
 #endif
 
-    // glfw��������
+    // glfw窗口创建
     // --------------------
     GLFWwindow* window = glfwCreateWindow(SCR_WIDTH, SCR_HEIGHT, "LearnOpenGL", NULL, NULL);
     if (window == NULL)
@@ -81,10 +81,10 @@ int main()
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
 
-    // ���� GLFW �������ǵ����
+    // 告诉 GLFW 我们要捕获鼠标
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
-    // glad���������� OpenGL ����ָ��
+    // glad: 加载所有 OpenGL 函数指针
     // ---------------------------------------
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
@@ -93,7 +93,7 @@ int main()
     }
     stbi_set_flip_vertically_on_load(true);
 
-    // ����ȫ�� OpenGL ״̬
+    // 配置全局 OpenGL 状态
     // -----------------------------
     glEnable(GL_DEPTH_TEST);
 
@@ -112,8 +112,8 @@ int main()
     // --- 创建沙盘实例 ---
     // 方法1：从高度图创建
     TerrainSandbox sandbox_heightmap(
-        1.5f, // 宽度
-        1.0f, // 深度
+        2.0f, // 宽度
+        1.8f, // 深度
         128,  // 网格精度
         TerrainSandbox::GenMethod::HEIGHTMAP,
         "resource/textures/heightmap1.png", // 高度图路径
@@ -182,7 +182,7 @@ int main()
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
 
-    // ͳһ�����õ���������Ϣ(ÿһ��ǰ��������Ϊ������꣬������Ϊ������)
+    // 统一房间用的顶点信息(每一个前面三个值为顶点坐标，后面三个值为法线向量)
     // ------------------------------------------------------------------
     float vertices[] = {
         // positions          // normals 
@@ -229,7 +229,7 @@ int main()
         -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
     };
 
-    // --- ����Բ�δ����Ķ������� ---
+    // --- 创建圆形窗户的顶点数据 ---
     // ------------------------------------------------------------------
     float windowOuterRadius = 1.2f;
     float windowScale = 1.2f;
@@ -237,11 +237,11 @@ int main()
     std::vector<float> circularWindowVertices = generateCircularWindowVertices(72, windowOuterRadius, 1.1f, 0.05f, 0.1f);    
     int windowVertexCount = circularWindowVertices.size() / 6;
 
-    // --- ���ɴ�����ǽ�Ķ������� ---
+    // --- 生成带洞的墙壁的顶点数据 ---
     std::vector<float> wallWithHoleVertices = generateWallWithHoleVertices(8.0f, 6.0f, windowOuterRadius * windowScale, 72);
     int wallWithHoleVertexCount = wallWithHoleVertices.size() / 6;
 
-    // ����ǽ�ڡ��ذ塢�컨���VAO/VBO
+    // 创建墙壁、地板、天花板的VAO/VBO
     // ------------------------------------------------------------------
     unsigned int roomVAO, roomVBO;
     glGenVertexArrays(1, &roomVAO);
@@ -249,14 +249,14 @@ int main()
     glBindVertexArray(roomVAO);
     glBindBuffer(GL_ARRAY_BUFFER, roomVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    // ����λ��
+    // 位置属性
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    // ���뷨����
+    // 法线属性
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // ������VAO/VBO
+    // 创建窗户VAO/VBO
     // ------------------------------------------------------------------
     unsigned int windowVAO, windowVBO;
     glGenVertexArrays(1, &windowVAO);
@@ -264,24 +264,24 @@ int main()
     glBindVertexArray(windowVAO);
     glBindBuffer(GL_ARRAY_BUFFER, windowVBO);
     glBufferData(GL_ARRAY_BUFFER, circularWindowVertices.size() * sizeof(float), circularWindowVertices.data(), GL_STATIC_DRAW);
-    // ����λ��
+    // 位置属性
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    // ���뷨����
+    // 法线属性
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // ���뷽��ƵĶ�����Ϣ
+    // 光源方块的顶点信息
     // ------------------------------------------------------------------
     unsigned int lightCubeVAO;
     glGenVertexArrays(1, &lightCubeVAO);
     glBindVertexArray(lightCubeVAO);
-    // ֻ���VBO, ���е����ݰ���������Ķ���
+    // 只绑定VBO, 因为它的数据和房间的顶点一样
     glBindBuffer(GL_ARRAY_BUFFER, roomVBO);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     
-    // ������ǽ��VAO/VBO
+    // 创建后墙的VAO/VBO
     // ------------------------------------------------------------------
     unsigned int wallVAO, wallVBO;
     glGenVertexArrays(1, &wallVAO);
@@ -294,26 +294,29 @@ int main()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    // ��Ⱦѭ��
+    // 渲染循环
     // -----------
     while (!glfwWindowShouldClose(window))
     {
-        // ʱ���߼�
+        // 时间逻辑
         // --------------------
         float currentFrame = static_cast<float>(glfwGetTime());
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        // ����
+        // 输入
         // -----
         processInput(window);
 
-        // ��ʼ��Ⱦ
+        // 开始渲染
         // ------
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        // ��Դλ�ù̶���̨�ƴ�
+        // --- 定义场景原点，将所有物体移动到房子中心 ---
+        glm::vec3 sceneOrigin = glm::vec3(0.0f, 0.0f, 0.0f); 
+
+        // 光源位置固定在台灯处
         glm::vec3 lampLightPos = glm::vec3(-1.0f, -1.1f, -2.5f);
 
         // 整体光照强度
@@ -321,7 +324,7 @@ int main()
         float overallIntensity = 1.0f; // 整体亮度
         glm::vec3 finalLightColor = warmColor * overallIntensity;
 
-        // ȷ�������� Uniforms/Drawing ����ʱ���� Shader
+        // 确保在设置 Uniforms/Drawing 之前激活 Shader
         //---------------------------------------------------------------------
         lightingShader.use();
         lightingShader.setVec3("lightPos", lampLightPos);
@@ -337,117 +340,117 @@ int main()
 
         glBindVertexArray(roomVAO);
 
-        // 台灯模型
+        // 绘制天花板
         {
-            //���ù��ղ���
+            //设置物体颜色
             lightingShader.setVec3("objectColor", 0.5, 0.5f, 0.5f);
 
-            // ��������任
+            // 设置模型变换
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0.0f, 3.0f, 0.0f));
             model = glm::scale(model, glm::vec3(8.0f, 0.1f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // ��Ⱦ
+            // 渲染
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // ���Ƶذ�
+        // 绘制地板
         {
-            //���ù��ղ���
+            //设置物体颜色
             lightingShader.use();
             lightingShader.setVec3("objectColor", 0.4f, 0.3f, 0.25f);
 
-            // ��������任
+            // 设置模型变换
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0.0f, -3.0f, 0.0f));
             model = glm::scale(model, glm::vec3(8.0f, 0.1f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // ��Ⱦ
+            // 渲染
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // ������ǽ
+        // 绘制左墙
         {
-            //���ù��ղ���
+            //设置物体颜色
             lightingShader.use();
             lightingShader.setVec3("objectColor", 0.9f, 0.85f, 0.7f);
 
-            // ��������任
+            // 设置模型变换
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(-4.0f, 0.0f, 0.0f));
             model = glm::scale(model, glm::vec3(0.1f, 6.0f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // ��Ⱦ
+            // 渲染
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // ������ǽ
+        // 绘制右墙
         {
-            //���ù��ղ���
+            //设置物体颜色
             lightingShader.use();
             lightingShader.setVec3("objectColor", 0.9f, 0.85f, 0.7f);
 
-            // ��������任
+            // 设置模型变换
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(4.0f, 0.0f, 0.0f));
             model = glm::scale(model, glm::vec3(0.1f, 6.0f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // ��Ⱦ
+            // 渲染
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
-        // // ���ƺ�ǽ
+        // // 绘制后墙
         // {
-        //     //���ù��ղ���
+        //     //设置物体颜色
         //     lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
 
-        //     // ��������任
+        //     // 设置模型变换
         //     model = glm::mat4(1.0f);
         //     model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f));
         //     model = glm::scale(model, glm::vec3(8.0f, 6.0f, 0.1f));
         //     lightingShader.setMat4("model", model);
 
-        //     // ��Ⱦ
+        //     // 渲染
         //     glDrawArrays(GL_TRIANGLES, 0, 36);
         // }
         
-        // ���ƴ����ĺ�ǽ
+        // 绘制带洞的后墙
         {
-            //���ù��ղ���
+            //设置物体颜色
             lightingShader.use();
             lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
 
-            // ��������任
+            // 设置模型变换
             model = glm::mat4(1.0f);
             model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f));
-            // ע�⣺���ﲻ����Ҫ scale����Ϊ���������Ѿ���������ȷ�ĳߴ�
+            // 不需要 scale，因为顶点已经定义了正确的尺寸
             lightingShader.setMat4("model", model);
 
-            // ��Ⱦ������ǽ
+            // 渲染带洞的墙
             glBindVertexArray(wallVAO);
             glDrawArrays(GL_TRIANGLES, 0, wallWithHoleVertexCount);
         }
 
-        // ���ƴ���
+        // 绘制窗户
         {
-            //���ù��ղ���
+            //设置物体颜色
             lightingShader.use();
-            lightingShader.setVec3("objectColor", 0.36, 0.2f, 0.09f); // ľ����ɫ
+            lightingShader.setVec3("objectColor", 0.36, 0.2f, 0.09f); // 木头颜色
 
-            // ��������任
+            // 设置模型变换
             model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f)); // �����ں�ǽǰһ��
+            model = glm::translate(model, glm::vec3(0.0f, 0.0f, -4.0f)); // 放在后墙前一点
             model = glm::scale(model, glm::vec3(1.2f));
             lightingShader.setMat4("model", model);
             glBindVertexArray(windowVAO);
             glDrawArrays(GL_TRIANGLES, 0, windowVertexCount); 
         }
 
-        // // ���Ƶ�
+        // // 绘制灯
         // {
         //     lightCubeShader.use();
         //     lightCubeShader.setMat4("projection", projection);
@@ -461,37 +464,37 @@ int main()
         //     glDrawArrays(GL_TRIANGLES, 0, 36);
         // }
 
-        // --- ��������ģ�� ---
+        // --- 绘制书桌模型 ---
         {
             modelShader.use();
             modelShader.setMat4("projection", projection);
             modelShader.setMat4("view", view);
 
-            // ���ù���
+            // 设置光照
             modelShader.setVec3("viewPos", camera.Position);
             modelShader.setVec3("light.position", lampLightPos);
             modelShader.setVec3("light.ambient", finalLightColor * 0.2f);
             modelShader.setVec3("light.diffuse", finalLightColor);
             modelShader.setVec3("light.specular", finalLightColor * 0.2f);
         
-            // ��Ⱦ���ص�ģ��
+            // 渲染桌子的模型
             model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, -3.0f, -2.5f)); // ���ڵذ��ϣ�����
-            model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.5f));	// �ʵ�����ģ��
-            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // ��ת90�ȣ�ʹ������ǰ��
+            model = glm::translate(model, sceneOrigin + glm::vec3(0.0f, -3.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.7f));	// 书桌的模型
+            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // 旋转90度，使桌子朝前
             modelShader.setMat4("model", model);
             ourModel.Draw(modelShader);
         }
 
-        // --- ����̨��ģ�� ---
+        // --- 绘制台灯模型 ---
         {
-            // modelShader �Ѿ�������� view/projection/light �� uniform ������
-            // ����ֻ��ҪΪ̨������һ���µ� model ����
+            // modelShader 已经激活，且 view/projection/light 等 uniform 已设置
+            // 所以只需要为台灯设置一个新的 model 矩阵
             modelShader.use(); 
             model = glm::mat4(1.0f);
-            // ��̨�Ʒ�������������ƫ���λ��
-            model = glm::translate(model, glm::vec3(-1.0f, -0.8f, -3.0f)); 
-            model = glm::scale(model, glm::vec3(0.3f)); // ����̨��ʹ��ߴ����
+            // 把台灯移动到桌子上的一个偏左位置
+            model = glm::translate(model, sceneOrigin + glm::vec3(-1.0f, -0.8f, -0.5f));
+            model = glm::scale(model, glm::vec3(0.3f)); // 调整台灯使尺寸合适
             modelShader.setMat4("model", model);
             lampModel.Draw(modelShader);
             
@@ -508,7 +511,7 @@ int main()
 
             model = glm::mat4(1.0f);
             // 将沙盘放在书桌上
-            model = glm::translate(model, glm::vec3(0.5f, -1.4f, -3.0f));
+            model = glm::translate(model, sceneOrigin + glm::vec3(0.5f, -1.4f, -1.0f)); 
             sandboxShader.setMat4("model", model);
 
             // 绘制沙盘 (根据选择的方法)
@@ -540,7 +543,7 @@ int main()
             const float layerSpacing = 0.01f; // 定义每层之间的间距
 
             // 计算云的基础位置和缩放
-            glm::vec3 sandboxBasePos = glm::vec3(0.5f, -1.4f, -3.0f);
+            glm::vec3 sandboxBasePos = sceneOrigin + glm::vec3(0.5f, -1.4f, -0.5f);
             glm::mat4 baseModel = glm::mat4(1.0f);
             baseModel = glm::translate(baseModel, sandboxBasePos + cloudPositionOffset);
             baseModel = glm::scale(baseModel, glm::vec3(0.5f)); // 调整云的大小
@@ -578,13 +581,13 @@ int main()
 
 
 
-        // glfw����������������ѯ IO �¼�������/�ͷż����ƶ����ȣ�
+        // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
 
-    // ����ѡ��һ����Դ��������;����ȡ������������Դ��
+    // optional: de-allocate all resources once they've outlived their purpose:
     // ------------------------------------------------------------------------
     glDeleteVertexArrays(1, &roomVAO);
     glDeleteVertexArrays(1, &lightCubeVAO);
@@ -597,13 +600,13 @@ int main()
     glDeleteBuffers(1, &cloudVBO); // <-- 清理云VBO
     glDeleteBuffers(1, &cloudEBO); // <-- 清理云EBO
 
-    // glfw����ֹ�����������ǰ����� GLFW ��Դ��
+    // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
     return 0;
 }
 
-//��ѯ GLFW �Ƿ���/�ͷ��˸�֡����ؼ���������Ӧ�ķ�Ӧ
+// process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow* window)
 {
@@ -660,16 +663,17 @@ void processInput(GLFWwindow* window)
 
 }
 
-// glfw��ÿ�����ڴ�С�����仯��ͨ������ϵͳ���û�������С��ʱ���˻ص���������ִ��
+// glfw: whenever the window size changed (by OS or user resize) this callback function executes
 // ---------------------------------------------------------------------------------------------
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-    // ȷ���������µĴ��ڳߴ�ƥ��;��ע�⣬width��height�����Դ��� Retina ��ʾ����ָ���ĸ߶�
+    // make sure the viewport matches the new window dimensions; note that width and 
+    // height will be significantly larger than specified on retina displays.
     glViewport(0, 0, width, height);
 }
 
 
-// glfw: ÿ������ƶ�ʱ���ûص����ᱻ����
+// glfw: whenever the mouse moves, this callback is called
 // -------------------------------------------------------
 void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
 {
@@ -683,7 +687,7 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     }
 
     float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // ��ת����Ϊ y ������µ���
+    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
 
     lastX = xpos;
     lastY = ypos;
@@ -691,21 +695,21 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
-// glfw:ÿ�������ֹ���ʱ���ûص����ᱻ����
+// glfw: whenever the mouse scroll wheel scrolls, this callback is called
 // ----------------------------------------------------------------------
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset)
 {
     camera.ProcessMouseScroll(static_cast<float>(yoffset));
 }
 
-// ������Բ�δ���������߼���װ��һ�������ĺ���
+// 将生成圆形窗户的逻辑封装到一个独立的函数
 std::vector<float> generateCircularWindowVertices(int segments, float outerRadius, float innerRadius, float barWidth, float depth)
 {
     std::vector<float> vertices;
     const float twoPI = 2.0f * static_cast<float>(M_PI);
     float halfDepth = depth / 2.0f;
 
-    // ������������������һ��������3D����Ƭ�� (��������)
+    // 辅助函数，用于添加一个3D条带 (用于圆环部分)
     auto add3DStrip = [&](glm::vec2 p1_inner, glm::vec2 p1_outer, glm::vec2 p2_inner, glm::vec2 p2_outer) {
         // Front face
         vertices.insert(vertices.end(), { p1_outer.x, p1_outer.y, halfDepth, 0, 0, 1 });
@@ -742,7 +746,7 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
         vertices.insert(vertices.end(), { p2_inner.x, p2_inner.y, -halfDepth, inner_normal.x, inner_normal.y, 0 });
     };
     
-    // ������������������һ��������3D���� (����ֱ��)
+    // 辅助函数，用于添加一个3D矩形 (用于直线部分)
     auto add3DRect = [&](float x1, float y1, float x2, float y2) {
         // Front
         vertices.insert(vertices.end(), { x1, y1, halfDepth, 0, 0, 1 });
@@ -788,7 +792,7 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
         vertices.insert(vertices.end(), { x2, y2, halfDepth, 1, 0, 0 });
     };
 
-    // 1. ��Բ����annulus��
+    // 1. 外圆环 (annulus)
     for (int i = 0; i < segments; ++i) {
         float angle1 = twoPI * static_cast<float>(i) / static_cast<float>(segments);
         float angle2 = twoPI * static_cast<float>(i + 1) / static_cast<float>(segments);
@@ -801,11 +805,11 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
         add3DStrip(p1_inner, p1_outer, p2_inner, p2_outer);
     }
 
-    // 2. �ڲ�ʮ�ָ�դ
-    add3DRect(-innerRadius, -barWidth, innerRadius, barWidth); // ˮƽ��
-    add3DRect(-barWidth, -innerRadius, barWidth, innerRadius); // ��ֱ��
+    // 2. 内部十字交叉
+    add3DRect(-innerRadius, -barWidth, innerRadius, barWidth); // 水平条
+    add3DRect(-barWidth, -innerRadius, barWidth, innerRadius); // 垂直条
 
-    // 3. ������β�������ĸ���Բ����
+    // 3. 四个角落的装饰性弧形
     const int patternSegments = 20;
     const float patternThickness = 0.034f;
     const float centerDist = 0.15f;
@@ -837,56 +841,56 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
         }
     }
     
-    // 4.�����в��˱��� ���ĸ�������
-    // ��
+    // 4.内部装饰性结构 四个小正方形
+    // 上
     add3DRect(-0.2f * innerRadius, 0.4f * innerRadius - barWidth, 0.2f * innerRadius, 0.4f * innerRadius + barWidth);
     add3DRect(-0.2f * innerRadius, 0.8f * innerRadius - barWidth, 0.2f * innerRadius, 0.8f * innerRadius);
     add3DRect(0.2f * innerRadius - barWidth, 0.4f * innerRadius, 0.2f * innerRadius, 0.8f * innerRadius);
     add3DRect(-0.2f * innerRadius, 0.4f * innerRadius, -0.2f * innerRadius + barWidth, 0.8f * innerRadius);
-    // ��
+    // 下
     add3DRect(-0.2f * innerRadius, -0.4f * innerRadius - barWidth, 0.2f * innerRadius, -0.4f * innerRadius + barWidth);
     add3DRect(-0.2f * innerRadius, -0.8f * innerRadius - barWidth, 0.2f * innerRadius, -0.8f * innerRadius);
     add3DRect(0.2f * innerRadius - barWidth, -0.8f * innerRadius, 0.2f * innerRadius, -0.4f * innerRadius);
     add3DRect(-0.2f * innerRadius, -0.8f * innerRadius, -0.2f * innerRadius + barWidth, -0.4f * innerRadius);
-    // ��
+    // 右
     add3DRect(0.4f * innerRadius - barWidth, -0.2f * innerRadius, 0.4f * innerRadius + barWidth, 0.2f * innerRadius);
     add3DRect(0.8f * innerRadius - barWidth, -0.2f * innerRadius, 0.8f * innerRadius, 0.2f * innerRadius);
     add3DRect(0.4f * innerRadius, 0.2f * innerRadius - barWidth, 0.8f * innerRadius, 0.2f * innerRadius);
     add3DRect(0.4f * innerRadius, -0.2f * innerRadius, 0.8f * innerRadius, -0.2f * innerRadius + barWidth);
-    // ��
+    // 左
     add3DRect(-0.4f * innerRadius - barWidth, -0.2f * innerRadius, -0.4f * innerRadius + barWidth, 0.2f * innerRadius);
     add3DRect(-0.8f * innerRadius - barWidth, -0.2f * innerRadius, -0.8f * innerRadius, 0.2f * innerRadius);
     add3DRect(-0.8f * innerRadius, 0.2f * innerRadius - barWidth, -0.4f * innerRadius, 0.2f * innerRadius);
     add3DRect(-0.8f * innerRadius, -0.2f * innerRadius, -0.4f * innerRadius, -0.2f * innerRadius + barWidth);
 
-    // ����б��
-    // (Ϊ�򻯣�б����һ�����Ƶľ��α�ʾ���Ӿ��ϲ����С)
+    // 添加斜线
+    // (为简化，斜线用一个很平的矩形表示，而不是精确的斜边)
     add3DRect(0.2f * innerRadius, 0.4f * innerRadius - barWidth, 0.4f * innerRadius + barWidth, 0.2f * innerRadius);
     add3DRect(-0.4f * innerRadius - barWidth, 0.2f * innerRadius, -0.2f * innerRadius, 0.4f * innerRadius + barWidth);
     add3DRect(-0.4f * innerRadius - barWidth, -0.2f * innerRadius, -0.2f * innerRadius, -0.4f * innerRadius - barWidth);
     add3DRect(0.2f * innerRadius, -0.4f * innerRadius - barWidth, 0.4f * innerRadius + barWidth, -0.2f * innerRadius);
 
-    // ��ÿ�����������������Ļ�һ��һ����ֱ��
-    add3DRect(-0.85f * innerRadius, 0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth); // ��
-    add3DRect(-0.85f * innerRadius, -0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, -0.6f * innerRadius + 0.5f * barWidth); // ��
-    add3DRect(-0.6f * innerRadius - 0.5f * barWidth, -0.85f * innerRadius, -0.6f * innerRadius + 0.5f * barWidth, 0.85f * innerRadius); // ��
-    add3DRect(0.6f * innerRadius - 0.5f * barWidth, -0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth, 0.85f * innerRadius); // ��
+    // 在每个象限的中间画一条水平和一条垂直线
+    add3DRect(-0.85f * innerRadius, 0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth); // 上
+    add3DRect(-0.85f * innerRadius, -0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, -0.6f * innerRadius + 0.5f * barWidth); // 下
+    add3DRect(-0.6f * innerRadius - 0.5f * barWidth, -0.85f * innerRadius, -0.6f * innerRadius + 0.5f * barWidth, 0.85f * innerRadius); // 左
+    add3DRect(0.6f * innerRadius - 0.5f * barWidth, -0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth, 0.85f * innerRadius); // 右
 
-    // ��ÿ��б�ߵ��е㿪ʼ, ������һ��ֱ��
-    // (Ϊ�򻯣�ͬ���ý��Ƶľ��α�ʾ)
-    add3DRect(-0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius + 0.5f * barWidth, 0.96f * innerRadius); // ����
-    add3DRect(0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, 0.96f * innerRadius); // ����
-    add3DRect(-0.3f * innerRadius - 0.5f * barWidth, -0.96f * innerRadius, -0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth); // ����
-    add3DRect(0.3f * innerRadius - 0.5f * barWidth, -0.96f * innerRadius, 0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth); // ����
-    add3DRect(0.3f * innerRadius + 0.5f * barWidth, 0.3f * innerRadius - 0.5f * barWidth, 0.96f * innerRadius, 0.3f * innerRadius + 0.5f * barWidth); // ����
-    add3DRect(0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, 0.96f * innerRadius, -0.3f * innerRadius + 0.5f * barWidth); // ����
-    add3DRect(-0.96f * innerRadius, 0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth); // ����
-    add3DRect(-0.96f * innerRadius, -0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius + 0.5f * barWidth); // ����
+    // 从每条斜线的中间点开始，向外画一条直线
+    // (为简化，同样用较平的矩形表示)
+    add3DRect(-0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius + 0.5f * barWidth, 0.96f * innerRadius); // 左上
+    add3DRect(0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth, 0.96f * innerRadius); // 右上
+    add3DRect(-0.3f * innerRadius - 0.5f * barWidth, -0.96f * innerRadius, -0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth); // 左下
+    add3DRect(0.3f * innerRadius - 0.5f * barWidth, -0.96f * innerRadius, 0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth); // 右下
+    add3DRect(0.3f * innerRadius + 0.5f * barWidth, 0.3f * innerRadius - 0.5f * barWidth, 0.96f * innerRadius, 0.3f * innerRadius + 0.5f * barWidth); // 右上
+    add3DRect(0.3f * innerRadius + 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, 0.96f * innerRadius, -0.3f * innerRadius + 0.5f * barWidth); // 右下
+    add3DRect(-0.96f * innerRadius, 0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, 0.3f * innerRadius + 0.5f * barWidth); // 左上
+    add3DRect(-0.96f * innerRadius, -0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius - 0.5f * barWidth, -0.3f * innerRadius + 0.5f * barWidth); // 左下
 
     return vertices;
 }
 
-// ���ɴ�Բ�ο׶���ǽ�ڶ���
+// 生成带圆形开口的墙壁顶点
 std::vector<float> generateWallWithHoleVertices(float width, float height, float holeRadius, int segments)
 {
     std::vector<float> vertices;
@@ -899,15 +903,15 @@ std::vector<float> generateWallWithHoleVertices(float width, float height, float
         float angle1 = twoPI * static_cast<float>(i) / static_cast<float>(segments);
         float angle2 = twoPI * static_cast<float>(i + 1) / static_cast<float>(segments);
 
-        // ��Ȧ���� (���ڱ�Ե)
+        // 内圈顶点 (洞的边缘)
         glm::vec3 inner1(holeRadius * cosf(angle1), holeRadius * sinf(angle1), 0.0f);
         glm::vec3 inner2(holeRadius * cosf(angle2), holeRadius * sinf(angle2), 0.0f);
 
-        // ��Ȧ���� (ǽ�ڱ�Ե)
-        // ʹ��һ���㹻�����Ӿ�����ȷ���ⶥ�㣬Ȼ����ü���ǽ��ʵ�ʱ߽�
-        float outer_x1 = std::max(-halfW, std::min(halfW, inner1.x * 100)); // ���Դ�����Ͷ�䵽��Ե
+        // 外圈顶点 (墙壁的边缘)
+        // 使用一个足够大的矩形来确保外顶点，然后裁剪到墙壁的实际边界
+        float outer_x1 = std::max(-halfW, std::min(halfW, inner1.x * 100)); // 将内点投影到边上
         float outer_y1 = std::max(-halfH, std::min(halfH, inner1.y * 100));
-        // �������ǽ�ǣ�ȷ������ȷ���ڽ���
+        // 处理角落，确保它们正确地在角落上
         if (abs(outer_x1) == halfW && abs(outer_y1) > 0) outer_y1 = (inner1.y > 0) ? halfH : -halfH;
         if (abs(outer_y1) == halfH && abs(outer_x1) > 0) outer_x1 = (inner1.x > 0) ? halfW : -halfW;
         
@@ -920,16 +924,16 @@ std::vector<float> generateWallWithHoleVertices(float width, float height, float
         glm::vec3 outer1(outer_x1, outer_y1, 0.0f);
         glm::vec3 outer2(outer_x2, outer_y2, 0.0f);
         
-        // ���ߣ����ں�ǽ��������Z��
+        // 法线，因为是后墙，所以朝向Z轴正方向
         glm::vec3 normal(0.0f, 0.0f, 1.0f);
 
-        // �����������ι���һ������
-        // ������ 1
+        // 用两个三角形构成一个四边形
+        // 三角形 1
         vertices.insert(vertices.end(), {inner1.x, inner1.y, inner1.z, normal.x, normal.y, normal.z});
         vertices.insert(vertices.end(), {outer1.x, outer1.y, outer1.z, normal.x, normal.y, normal.z});
         vertices.insert(vertices.end(), {outer2.x, outer2.y, outer2.z, normal.x, normal.y, normal.z});
 
-        // ������ 2
+        // 三角形 2
         vertices.insert(vertices.end(), {inner1.x, inner1.y, inner1.z, normal.x, normal.y, normal.z});
         vertices.insert(vertices.end(), {outer2.x, outer2.y, outer2.z, normal.x, normal.y, normal.z});
         vertices.insert(vertices.end(), {inner2.x, inner2.y, inner2.z, normal.x, normal.y, normal.z});
