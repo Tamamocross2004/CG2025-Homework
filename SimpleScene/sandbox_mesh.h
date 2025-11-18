@@ -17,7 +17,7 @@ public:
     };
 
     // 构造函数
-    TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath = nullptr, const char* diffusePath = nullptr, const char* normalPath = nullptr);
+    TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath, const char* grassPath, const char* normalPath);
     // 析构函数
     ~TerrainSandbox();
 
@@ -31,6 +31,9 @@ public:
     float getTerrainWidth() const { return terrainWidth; }
     float getTerrainDepth() const { return terrainDepth; }
 
+    // 在指定位置添加草地生长效果
+    void addGrowth(float worldX, float worldZ);
+
 private:
     unsigned int VAO, VBO, EBO;
     std::vector<float> vertices;
@@ -39,6 +42,13 @@ private:
     unsigned int normalTexture;
     int indexCount;
     float baseHeight;
+
+    unsigned int grassTexture;      // 草地纹理
+    unsigned int growthTexture;     // 生长蒙版纹理
+    unsigned int growthFBO;         // 用于绘制到生长纹理的FBO
+    Shader paintShader;             // 绘制用的着色器
+    unsigned int paintQuadVAO;      // 绘制笔刷用的VAO
+    int growthTextureSize = 512;    // 生长纹理的分辨率
 
     // 存储地形尺寸和顶点数据以供查询
     float terrainWidth;
@@ -52,4 +62,7 @@ private:
     void setupMesh();
     // 加载纹理
     unsigned int loadTexture(const char* path);
+
+    // 设置生长纹理
+    void setupGrowthTexture();
 };

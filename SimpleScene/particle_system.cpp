@@ -84,6 +84,8 @@ void ParticleSystem::Update(float dt, const glm::vec3& cloudCenter, const glm::v
 
             if (p.position.y < worldTerrainSurfaceY) {
                 p.life = 0.0f; // 碰到地形，重置
+                // 生长草地
+                terrain->addGrowth(particleLocalPos.x, particleLocalPos.z);
             }
         }
         else

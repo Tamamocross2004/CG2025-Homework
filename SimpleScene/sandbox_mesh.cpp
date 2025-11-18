@@ -2,7 +2,9 @@
 // #define STB_IMAGE_IMPLEMENTATION 
 #include "stb_image.h"           
 
-TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath, const char* normalPath) {
+TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath, const char* grassPath, const char* normalPath) 
+    : paintShader("paint.vs", "paint.fs")
+{
     baseHeight = 0.1f;
     // 保存地形尺寸信息
     terrainWidth = width;
@@ -11,28 +13,25 @@ TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMeth
 
     generateMesh(width, depth, resolution, method, heightmapPath);
     setupMesh();
-    if(diffusePath) {
-        diffuseTexture = loadTexture(diffusePath);
-    } else {
-        diffuseTexture = 0;
-    }
-    if(normalPath) {
-        normalTexture = loadTexture(normalPath);
-    } else {
-        normalTexture = 0;
-    }
+    // 加载纹理
+    diffuseTexture = diffusePath ? loadTexture(diffusePath) : 0;
+    grassTexture = grassPath ? loadTexture(grassPath) : 0; 
+    normalTexture = normalPath ? loadTexture(normalPath) : 0;
+
+    // 设置动态生长纹理
+    setupGrowthTexture();
 }
 
 TerrainSandbox::~TerrainSandbox(){
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
-    if(diffuseTexture != 0){
-        glDeleteTextures(1, &diffuseTexture);
-    }
-    if(normalTexture != 0){
-        glDeleteTextures(1, &normalTexture);
-    }
+    glDeleteTextures(1, &diffuseTexture);
+    glDeleteTextures(1, &normalTexture);
+    glDeleteTextures(1, &grassTexture);
+    glDeleteTextures(1, &growthTexture);
+    glDeleteFramebuffers(1, &growthFBO);
+    glDeleteVertexArrays(1, &paintQuadVAO);
 }
 
 void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenMethod method, const char* heightmapPath) {
@@ -224,10 +223,19 @@ void TerrainSandbox::Draw(Shader& shader) {
     shader.setInt("texture_diffuse1", 0);
     glBindTexture(GL_TEXTURE_2D, diffuseTexture);
 
-    // 绑定法线贴图到纹理单元 1
+    // 绑定草地和生长蒙版纹理 1、2
+    glActiveTexture(GL_TEXTURE1);
+    shader.setInt("texture_grass1", 1);
+    glBindTexture(GL_TEXTURE_2D, grassTexture);
+
+    glActiveTexture(GL_TEXTURE2);
+    shader.setInt("texture_growth_mask", 2);
+    glBindTexture(GL_TEXTURE_2D, growthTexture);
+
+    // 绑定法线贴图到纹理单元 3
     if (normalTexture != 0) {
-        glActiveTexture(GL_TEXTURE1);
-        shader.setInt("texture_normal1", 1);
+        glActiveTexture(GL_TEXTURE3);
+        shader.setInt("texture_normal1", 3);
         glBindTexture(GL_TEXTURE_2D, normalTexture);
     }
 
@@ -245,6 +253,8 @@ unsigned int TerrainSandbox::loadTexture(const char* path) {
     int width, height, nrComponents;
     unsigned char* data = stbi_load(path, &width, &height, &nrComponents, 0);
     if (data) {
+        std::cout << "SUCCESS: Texture loaded successfully from path: " << path << std::endl;
+
         GLenum format;
         if (nrComponents == 1) format = GL_RED;
         else if (nrComponents == 3) format = GL_RGB;
@@ -262,7 +272,7 @@ unsigned int TerrainSandbox::loadTexture(const char* path) {
         stbi_image_free(data);
     }
     else {
-        std::cout << "Texture failed to load at path: " << path << std::endl;
+        std::cout << "ERROR: Texture failed to load at path: " << path << std::endl;
         // stbi_image_free(data);
     }
 
@@ -315,4 +325,72 @@ float TerrainSandbox::getHeight(float worldX, float worldZ) {
     } else { // 右下三角形
         return barryCentric(p2, p4, p3, glm::vec2(worldX, worldZ));
     }
+}
+
+void TerrainSandbox::setupGrowthTexture() {
+    // 创建生长纹理
+    glGenTextures(1, &growthTexture);
+    glBindTexture(GL_TEXTURE_2D, growthTexture);
+    // 创建一个 512x512 的空白纹理，初始为黑色
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, growthTextureSize, growthTextureSize, 0, GL_RGBA, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+    // 创建FBO并绑定纹理
+    glGenFramebuffers(1, &growthFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, growthFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, growthTexture, 0);
+
+    // 检查FBO是否完整
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // 创建一个简单的四边形用于绘制笔刷
+    float quadVertices[] = { -1.0f, 1.0f, -1.0f, -1.0f, 1.0f, 1.0f, 1.0f, -1.0f };
+    unsigned int quadVBO;
+    glGenVertexArrays(1, &paintQuadVAO);
+    glGenBuffers(1, &quadVBO);
+    glBindVertexArray(paintQuadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glBindVertexArray(0);
+}
+
+void TerrainSandbox::addGrowth(float worldX, float worldZ) {
+    const unsigned int SCR_WIDTH = 1600;
+    const unsigned int SCR_HEIGHT = 1200;
+    // 将世界坐标转换为地形UV坐标 (0-1范围)
+    float u = (worldX / terrainWidth) + 0.5f;
+    float v = (worldZ / terrainDepth) + 0.5f;
+
+    // 如果在范围外则忽略
+    if (u < 0 || u > 1 || v < 0 || v > 1) return;
+
+    // --- 开始绘制到 growthTexture ---
+    glViewport(0, 0, growthTextureSize, growthTextureSize);
+    glBindFramebuffer(GL_FRAMEBUFFER, growthFBO);
+    
+    // 启用混合，这样每次绘制都是叠加效果
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE); // 加法混合
+
+    paintShader.use();
+    paintShader.setVec2("center", glm::vec2(u, v));
+    paintShader.setFloat("radius", 0.15f); // 草地斑块的半径
+    paintShader.setFloat("scale", (float)growthTextureSize);
+
+    glBindVertexArray(paintQuadVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
+
+    glDisable(GL_BLEND);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // 恢复主视口
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT); // 假设 SCR_WIDTH/HEIGHT 是可访问的，更好的方法是传入
 }

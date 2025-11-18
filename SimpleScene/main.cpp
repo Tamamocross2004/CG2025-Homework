@@ -118,6 +118,7 @@ int main()
         TerrainSandbox::GenMethod::HEIGHTMAP,
         "resource/textures/heightmap1.png", // 高度图路径
         "resource/textures/red_sand_diff_4k.jpg",  // 沙子纹理路径
+        "resource/textures/grass.jpg", // 草地纹理路径
         "resource/textures/red_sand_disp_4k.png" // 法线/灰度图路径
     );
 
