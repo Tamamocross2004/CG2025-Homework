@@ -1,8 +1,8 @@
 #include "particle_system.h"
 #include <glm/gtc/random.hpp>
 
-ParticleSystem::ParticleSystem(unsigned int maxParticles, TerrainSandbox* terrain)
-    : maxParticles(maxParticles), terrain(terrain), particleShader("rain.vs", "rain.fs") {
+ParticleSystem::ParticleSystem(unsigned int maxParticles, TerrainSandbox* terrain, const char* vsPath, const char* fsPath)
+    : maxParticles(maxParticles), terrain(terrain), particleShader(vsPath, fsPath) {
     
     particles.resize(maxParticles);
 
@@ -47,7 +47,7 @@ void ParticleSystem::resetParticle(Particle& particle, const glm::vec3& cloudCen
     particle.life = 1.0f;
 }
 
-void ParticleSystem::Update(float dt, const glm::vec3& cloudCenter, const glm::vec3& terrainWorldPos){
+void ParticleSystem::Update(float dt, const glm::vec3& cloudCenter, const glm::vec3& terrainWorldPos, EffectType effect){
     for(auto& p : particles){
         if(p.life <= 0.0f){
             resetParticle(p, cloudCenter);
@@ -59,8 +59,6 @@ void ParticleSystem::Update(float dt, const glm::vec3& cloudCenter, const glm::v
 
         // 只更新Y轴的下落
         p.position.y += p.velocity.y * dt;
-
-
 
         // 碰撞检测
         // 将雨滴的世界坐标转换为沙盘的局部坐标
@@ -83,9 +81,15 @@ void ParticleSystem::Update(float dt, const glm::vec3& cloudCenter, const glm::v
             float worldTerrainSurfaceY = terrainWorldPos.y + localTerrainHeight;
 
             if (p.position.y < worldTerrainSurfaceY) {
-                p.life = 0.0f; // 碰到地形，重置
-                // 生长草地
-                terrain->addGrowth(particleLocalPos.x, particleLocalPos.z);
+                // 碰到地形，重置
+                p.life = 0.0f; 
+
+                // 根据效果类型调用不同的函数
+                if (effect == EffectType::GROWTH) {
+                    terrain->addGrowth(particleLocalPos.x, particleLocalPos.z);
+                } else if (effect == EffectType::SNOW) {
+                    terrain->addSnow(particleLocalPos.x, particleLocalPos.z);
+                }
             }
         }
         else
@@ -105,7 +109,7 @@ void ParticleSystem::Update(float dt, const glm::vec3& cloudCenter, const glm::v
 
 }
 
-void ParticleSystem::Draw(const glm::mat4& view, const glm::mat4& projection) {
+void ParticleSystem::Draw(const glm::mat4& view, const glm::mat4& projection, bool drawAsPoints) {
     // 启用混合和点大小设置
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -129,8 +133,16 @@ void ParticleSystem::Draw(const glm::mat4& view, const glm::mat4& projection) {
         particleShader.use();
         particleShader.setMat4("projection", projection);
         particleShader.setMat4("view", view);
+
         glBindVertexArray(VAO);
-        glDrawArrays(GL_POINTS, 0, particle_positions.size());
+        if (drawAsPoints) {
+            glEnable(GL_PROGRAM_POINT_SIZE); // 允许着色器设置点大小
+            glDrawArrays(GL_POINTS, 0, particle_positions.size());
+            glDisable(GL_PROGRAM_POINT_SIZE);
+        } else {
+            // 雨滴也用点来画，更高效
+            glDrawArrays(GL_POINTS, 0, particle_positions.size());
+        }
         glBindVertexArray(0);
     }
 

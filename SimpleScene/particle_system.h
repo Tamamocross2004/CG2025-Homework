@@ -17,15 +17,18 @@ struct Particle {
 // 粒子系统类
 class ParticleSystem {
 public:
+    // 效果类型
+    enum class EffectType { NONE, GROWTH, SNOW }; 
+
     // 构造函数：需要最大粒子数和指向地形的指针
-    ParticleSystem(unsigned int maxParticles, TerrainSandbox* terrain);
+    ParticleSystem(unsigned int maxParticles, TerrainSandbox* terrain, const char* vsPath = "rain.vs", const char* fsPath = "rain.fs");
     ~ParticleSystem();
 
     // 更新所有粒子的状态
-    void Update(float dt, const glm::vec3& cloudCenter, const glm::vec3& terrainWorldPos);
+    void Update(float dt, const glm::vec3& cloudCenter, const glm::vec3& terrainWorldPos, EffectType effect);
     
     // 渲染所有粒子
-    void Draw(const glm::mat4& view, const glm::mat4& projection);
+    void Draw(const glm::mat4& view, const glm::mat4& projection, bool drawAsPoints = false);
 
 private:
     // 重置单个粒子，让它回到云中

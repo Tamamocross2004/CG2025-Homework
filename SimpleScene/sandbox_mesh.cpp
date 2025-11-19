@@ -2,7 +2,7 @@
 // #define STB_IMAGE_IMPLEMENTATION 
 #include "stb_image.h"           
 
-TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath, const char* grassPath, const char* normalPath) 
+TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath, const char* grassPath, const char* snowPath, const char* normalPath) 
     : paintShader("paint.vs", "paint.fs")
 {
     baseHeight = 0.1f;
@@ -16,6 +16,7 @@ TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMeth
     // 加载纹理
     diffuseTexture = diffusePath ? loadTexture(diffusePath) : 0;
     grassTexture = grassPath ? loadTexture(grassPath) : 0; 
+    snowTexture = snowPath ? loadTexture(snowPath) : 0;
     normalTexture = normalPath ? loadTexture(normalPath) : 0;
 
     // 设置动态生长纹理
@@ -29,6 +30,7 @@ TerrainSandbox::~TerrainSandbox(){
     glDeleteTextures(1, &diffuseTexture);
     glDeleteTextures(1, &normalTexture);
     glDeleteTextures(1, &grassTexture);
+    glDeleteTextures(1, &snowTexture);
     glDeleteTextures(1, &growthTexture);
     glDeleteFramebuffers(1, &growthFBO);
     glDeleteVertexArrays(1, &paintQuadVAO);
@@ -228,14 +230,19 @@ void TerrainSandbox::Draw(Shader& shader) {
     shader.setInt("texture_grass1", 1);
     glBindTexture(GL_TEXTURE_2D, grassTexture);
 
+    // 绑定雪地纹理
     glActiveTexture(GL_TEXTURE2);
-    shader.setInt("texture_growth_mask", 2);
+    shader.setInt("texture_snow1", 2);
+    glBindTexture(GL_TEXTURE_2D, snowTexture);
+
+    glActiveTexture(GL_TEXTURE3);
+    shader.setInt("texture_effect_mask", 3);
     glBindTexture(GL_TEXTURE_2D, growthTexture);
 
-    // 绑定法线贴图到纹理单元 3
+    // 绑定法线贴图到纹理单元4
     if (normalTexture != 0) {
-        glActiveTexture(GL_TEXTURE3);
-        shader.setInt("texture_normal1", 3);
+        glActiveTexture(GL_TEXTURE4);
+        shader.setInt("texture_normal1", 4);
         glBindTexture(GL_TEXTURE_2D, normalTexture);
     }
 
@@ -383,6 +390,8 @@ void TerrainSandbox::addGrowth(float worldX, float worldZ) {
     paintShader.setVec2("center", glm::vec2(u, v));
     paintShader.setFloat("radius", 0.15f); // 草地斑块的半径
     paintShader.setFloat("scale", (float)growthTextureSize);
+    // 绘制到红色通道
+    paintShader.setVec3("paintColor", glm::vec3(1.0f, 0.0f, 0.0f)); 
 
     glBindVertexArray(paintQuadVAO);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
@@ -392,5 +401,37 @@ void TerrainSandbox::addGrowth(float worldX, float worldZ) {
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     // 恢复主视口
-    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT); // 假设 SCR_WIDTH/HEIGHT 是可访问的，更好的方法是传入
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT); 
+}
+
+void TerrainSandbox::addSnow(float worldX, float worldZ) {
+    const unsigned int SCR_WIDTH = 1600;
+    const unsigned int SCR_HEIGHT = 1200;
+
+    float u = (worldX / terrainWidth) + 0.5f;
+    float v = (worldZ / terrainDepth) + 0.5f;
+
+    if (u < 0 || u > 1 || v < 0 || v > 1) return;
+
+    glViewport(0, 0, growthTextureSize, growthTextureSize);
+    glBindFramebuffer(GL_FRAMEBUFFER, growthFBO);
+    
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_ONE, GL_ONE);
+
+    paintShader.use();
+    paintShader.setVec2("center", glm::vec2(u, v));
+    paintShader.setFloat("radius", 0.15f); 
+    paintShader.setFloat("scale", (float)growthTextureSize);
+    // 绘制到绿色通道
+    paintShader.setVec3("paintColor", glm::vec3(0.0f, 1.0f, 0.0f)); 
+
+    glBindVertexArray(paintQuadVAO);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+    glBindVertexArray(0);
+
+    glDisable(GL_BLEND);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
 }

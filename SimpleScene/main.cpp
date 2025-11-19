@@ -42,10 +42,12 @@ bool firstMouse = true;
 
 // 雨云状态
 bool isCloudVisible = false;
-glm::vec3 cloudPositionOffset(0.0f, 1.0f, 0.0f); // 云相对于沙盘中心的偏移
-bool mKeyPressed = false; // 用于防止长按M键时快速切换
-bool isRaining = false;
-bool rKeyPressed = false;
+glm::vec3 cloudPositionOffset(0.0f, 1.0f, 0.0f);    // 云相对于沙盘中心的偏移
+bool mKeyPressed = false;                           // M键状态
+bool isRaining = false;                             // 下雨状态
+bool rKeyPressed = false;                           // R键状态
+bool isSnowing = false;                             // 下雪状态
+bool bKeyPressed = false;                           // B键状态
 
 // 时间管理
 float deltaTime = 0.0f;
@@ -119,6 +121,7 @@ int main()
         "resource/textures/heightmap1.png", // 高度图路径
         "resource/textures/red_sand_diff_4k.jpg",  // 沙子纹理路径
         "resource/textures/grass.jpg", // 草地纹理路径
+        "resource/textures/snow2.png", // 雪地纹理路径
         "resource/textures/red_sand_disp_4k.png" // 法线/灰度图路径
     );
 
@@ -130,8 +133,9 @@ int main()
     //     "resource/textures/red_sand_diff_4k.jpg"
     // );
 
-    // --- 初始化雨滴粒子系统 ---
-    ParticleSystem rainSystem(2000, &sandbox_heightmap); // 创建粒子系统实例
+    // --- 初始化粒子系统 ---
+    ParticleSystem rainSystem(2000, &sandbox_heightmap);
+    ParticleSystem snowSystem(3000, &sandbox_heightmap, "snow.vs", "snow.fs");
 
     // --- 加载云纹理 ---
     unsigned int cloudTexture;
@@ -576,11 +580,16 @@ int main()
             // 绘制完毕后禁用混合，以免影响其他物体
             glDisable(GL_BLEND);
 
-            // --- 更新和绘制雨滴 ---
+            // --- 更新和绘制粒子 ---
             if (isRaining)
             {
-                rainSystem.Update(deltaTime, cloudWorldCenter, sandboxWorldPos);
+                rainSystem.Update(deltaTime, cloudWorldCenter, sandboxWorldPos, ParticleSystem::EffectType::GROWTH);
                 rainSystem.Draw(view, projection);
+            }
+            if (isSnowing)
+            {
+                snowSystem.Update(deltaTime, cloudWorldCenter, sandboxWorldPos, ParticleSystem::EffectType::SNOW);
+                snowSystem.Draw(view, projection, true); // true 表示以点的形式绘制
             }
         }
 
@@ -644,13 +653,30 @@ void processInput(GLFWwindow* window)
     {
         if (isCloudVisible) { // 只有云可见时才能下雨
             isRaining = !isRaining;
+            if (isRaining) isSnowing = false; // 下雨时停止下雪
         }
         rKeyPressed = true;
     }
+
     if (glfwGetKey(window, GLFW_KEY_R) == GLFW_RELEASE)
     {
         rKeyPressed = false;
     }
+
+    if (glfwGetKey(window, GLFW_KEY_B) == GLFW_PRESS && !bKeyPressed)
+    {
+        if (isCloudVisible) { // 只有云可见时才能下雪
+            isSnowing = !isSnowing;
+            if (isSnowing) isRaining = false; // 下雪时停止下雨
+        }
+        bKeyPressed = true;
+    }
+
+    if (glfwGetKey(window, GLFW_KEY_B) == GLFW_RELEASE)
+    {
+        bKeyPressed = false;
+    }
+
 
     // 移动雨云
     if (isCloudVisible)

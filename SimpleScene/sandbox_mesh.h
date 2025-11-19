@@ -17,7 +17,7 @@ public:
     };
 
     // 构造函数
-    TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath, const char* grassPath, const char* normalPath);
+    TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath, const char* grassPath, const char* snowPath, const char* normalPath);
     // 析构函数
     ~TerrainSandbox();
 
@@ -33,6 +33,8 @@ public:
 
     // 在指定位置添加草地生长效果
     void addGrowth(float worldX, float worldZ);
+    // 在指定位置添加积雪效果
+    void addSnow(float worldX, float worldZ);
 
 private:
     unsigned int VAO, VBO, EBO;
@@ -44,7 +46,8 @@ private:
     float baseHeight;
 
     unsigned int grassTexture;      // 草地纹理
-    unsigned int growthTexture;     // 生长蒙版纹理
+    unsigned int snowTexture;       // 雪地纹理
+    unsigned int growthTexture;     // 生长/积雪蒙版纹理
     unsigned int growthFBO;         // 用于绘制到生长纹理的FBO
     Shader paintShader;             // 绘制用的着色器
     unsigned int paintQuadVAO;      // 绘制笔刷用的VAO
