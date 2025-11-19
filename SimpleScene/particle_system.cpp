@@ -36,7 +36,8 @@ void ParticleSystem::resetParticle(Particle& particle, const glm::vec3& cloudCen
     float randZ = glm::linearRand(-0.5f, 0.5f);
     
     // 记录这个随机偏移
-    particle.initialOffset = glm::vec3(randX, 0.0f, randZ);
+    float cloudScale = 0.5f;
+    particle.initialOffset = glm::vec3(randX * cloudScale, 0.0f, randZ * cloudScale);
     
     // 设置初始位置
     particle.position = cloudCenter + particle.initialOffset;

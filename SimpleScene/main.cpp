@@ -124,6 +124,7 @@ int main()
         "resource/textures/snow2.png", // 雪地纹理路径
         "resource/textures/red_sand_disp_4k.png" // 法线/灰度图路径
     );
+    sandbox_heightmap.setupMesh(sandboxShader); 
 
     // // 方法2：程序化随机生成
     // TerrainSandbox sandbox_procedural(
@@ -555,7 +556,7 @@ int main()
             glm::vec3 sandboxBasePos = sceneOrigin + glm::vec3(0.5f, -1.4f, -0.5f);
             glm::mat4 baseModel = glm::mat4(1.0f);
             baseModel = glm::translate(baseModel, sandboxWorldPos + cloudPositionOffset);
-            baseModel = glm::scale(baseModel, glm::vec3(1.0f)); // 调整云的大小
+            baseModel = glm::scale(baseModel, glm::vec3(0.5f)); // 调整云的大小
             // baseModel = glm::rotate(baseModel, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
             glBindVertexArray(cloudVAO);

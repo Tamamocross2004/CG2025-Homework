@@ -12,7 +12,7 @@ TerrainSandbox::TerrainSandbox(float width, float depth, int resolution, GenMeth
     terrainResolution = resolution;
 
     generateMesh(width, depth, resolution, method, heightmapPath);
-    setupMesh();
+    // setupMesh();
     // 加载纹理
     diffuseTexture = diffusePath ? loadTexture(diffusePath) : 0;
     grassTexture = grassPath ? loadTexture(grassPath) : 0; 
@@ -42,7 +42,7 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
     std::vector<glm::vec2> uvs;
     std::vector<glm::vec3> normals;
 
-    // 生成顶点位置和UV
+    // 1. 生成顶点位置和UV
     for (int i = 0; i <= resolution; i++) {
         for (int j = 0; j <= resolution; j++) {
             float x = (float)j / (float)resolution * width - width / 2.0f;
@@ -52,21 +52,17 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         }
     }
 
-    // 保存地形顶点位置用于高度查询
-    this->terrainPositions = positions;
-
-    // 根据方法设置高度 (Y坐标)
+    // 2. 根据方法设置高度 (Y坐标)
     if (method == GenMethod::HEIGHTMAP && heightmapPath != nullptr) {
         int imgWidth, imgHeight, nrChannels;
         unsigned char* data = stbi_load(heightmapPath, &imgWidth, &imgHeight, &nrChannels, 0);
         if (data) {
             for (int i = 0; i <= resolution; i++) {
                 for (int j = 0; j <= resolution; j++) {
-                    // 根据UV坐标采样高度图
                     int texX = static_cast<int>(uvs[i * (resolution + 1) + j].x * (imgWidth - 1));
                     int texY = static_cast<int>(uvs[i * (resolution + 1) + j].y * (imgHeight - 1));
                     unsigned char height = data[(texY * imgWidth + texX) * nrChannels];
-                    positions[i * (resolution + 1) + j].y = (height / 255.0f) * 0.2f; // 高度缩放因子
+                    positions[i * (resolution + 1) + j].y = (height / 255.0f) * 0.2f;
                 }
             }
             stbi_image_free(data);
@@ -75,32 +71,27 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         }
     } else if (method == GenMethod::PROCEDURAL_RANDOM) {
         for (auto& pos : positions) {
-            pos.y = ((rand() % 100) / 100.0f) * 0.15f; // 随机高度
+            pos.y = ((rand() % 100) / 100.0f) * 0.15f;
         }
     }
 
-    // 生成索引
+    // 3. 生成索引
+    indices.clear();
     for (int i = 0; i < resolution; i++) {
         for (int j = 0; j < resolution; j++) {
             int row1 = i * (resolution + 1);
             int row2 = (i + 1) * (resolution + 1);
-            // 三角形 1
             indices.push_back(row1 + j);
             indices.push_back(row2 + j + 1);
             indices.push_back(row2 + j);
-            // 三角形 2
             indices.push_back(row1 + j);
             indices.push_back(row1 + j + 1);
             indices.push_back(row2 + j + 1);
         }
     }
-    indexCount = indices.size();
 
-    // 更新保存的地形顶点位置
-    this->terrainPositions = positions;
-
-    // 计算法线
-    normals.resize(positions.size(), glm::vec3(0.0f));
+    // 4. 计算法线
+    normals.assign(positions.size(), glm::vec3(0.0f));
     for (size_t i = 0; i < indices.size(); i += 3) {
         glm::vec3 p1 = positions[indices[i]];
         glm::vec3 p2 = positions[indices[i + 1]];
@@ -114,30 +105,66 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         n = glm::normalize(n);
     }
 
-    // 合并顶点数据
-    for (size_t i = 0; i < positions.size(); ++i) {
-        vertices.push_back(positions[i].x);
-        vertices.push_back(positions[i].y);
-        vertices.push_back(positions[i].z);
-        vertices.push_back(normals[i].x);
-        vertices.push_back(normals[i].y);
-        vertices.push_back(normals[i].z);
-        vertices.push_back(uvs[i].x);
-        vertices.push_back(uvs[i].y);
+    // 计算切线和副切线 ---
+    std::vector<glm::vec3> tangents(positions.size(), glm::vec3(0.0f));
+    std::vector<glm::vec3> bitangents(positions.size(), glm::vec3(0.0f));
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        glm::vec3 p1 = positions[indices[i]];
+        glm::vec3 p2 = positions[indices[i+1]];
+        glm::vec3 p3 = positions[indices[i+2]];
+        glm::vec2 uv1 = uvs[indices[i]];
+        glm::vec2 uv2 = uvs[indices[i+1]];
+        glm::vec2 uv3 = uvs[indices[i+2]];
+
+        glm::vec3 edge1 = p2 - p1;
+        glm::vec3 edge2 = p3 - p1;
+        glm::vec2 deltaUV1 = uv2 - uv1;
+        glm::vec2 deltaUV2 = uv3 - uv1;
+
+        float f = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV2.x * deltaUV1.y);
+        if (isinf(f) || isnan(f)) f = 0.0f;
+
+        glm::vec3 tangent, bitangent;
+        tangent.x = f * (deltaUV2.y * edge1.x - deltaUV1.y * edge2.x);
+        tangent.y = f * (deltaUV2.y * edge1.y - deltaUV1.y * edge2.y);
+        tangent.z = f * (deltaUV2.y * edge1.z - deltaUV1.y * edge2.z);
+        
+        bitangent.x = f * (-deltaUV2.x * edge1.x + deltaUV1.x * edge2.x);
+        bitangent.y = f * (-deltaUV2.x * edge1.y + deltaUV1.x * edge2.y);
+        bitangent.z = f * (-deltaUV2.x * edge1.z + deltaUV1.x * edge2.z);
+
+        tangents[indices[i]] += tangent;
+        tangents[indices[i+1]] += tangent;
+        tangents[indices[i+2]] += tangent;
+        bitangents[indices[i]] += bitangent;
+        bitangents[indices[i+1]] += bitangent;
+        bitangents[indices[i+2]] += bitangent;
     }
 
-    // 生成底座
+    // 5. 填充 Vertex 结构体 (for top surface)
+    vertices.clear();
+    vertices.resize(positions.size());
+    for (size_t i = 0; i < positions.size(); ++i) {
+        vertices[i].Position = positions[i];
+        vertices[i].Normal = normals[i];
+        vertices[i].TexCoords = uvs[i];
+        vertices[i].Tangent = glm::normalize(tangents[i]);
+        vertices[i].Bitangent = glm::normalize(bitangents[i]);
+        vertices[i].isTopSurface = 1.0f;
+    }
+
+    // 6. 生成底座和侧壁
     float halfW = width / 2.0f;
     float halfD = depth / 2.0f;
     
-    // 1. 生成底座的底面 (这部分不变)
-    unsigned int baseVertexOffset = vertices.size() / 8; // 当前顶点总数
-    // 底面顶点
-    vertices.insert(vertices.end(), { halfW, -baseHeight,  halfD, 0, -1, 0, 1, 1 });
-    vertices.insert(vertices.end(), {-halfW, -baseHeight,  halfD, 0, -1, 0, 0, 1 });
-    vertices.insert(vertices.end(), {-halfW, -baseHeight, -halfD, 0, -1, 0, 0, 0 });
-    vertices.insert(vertices.end(), { halfW, -baseHeight, -halfD, 0, -1, 0, 1, 0 });
-    // 底面索引
+    unsigned int baseVertexOffset = vertices.size();
+    // --- 关键修复：为所有成员提供初始值 ---
+    glm::vec3 zeroVec(0.0f);
+    vertices.push_back({{ halfW, -baseHeight,  halfD}, {0, -1, 0}, {1, 1}, zeroVec, zeroVec, 0.0f});
+    vertices.push_back({{-halfW, -baseHeight,  halfD}, {0, -1, 0}, {0, 1}, zeroVec, zeroVec, 0.0f});
+    vertices.push_back({{-halfW, -baseHeight, -halfD}, {0, -1, 0}, {0, 0}, zeroVec, zeroVec, 0.0f});
+    vertices.push_back({{ halfW, -baseHeight, -halfD}, {0, -1, 0}, {1, 0}, zeroVec, zeroVec, 0.0f});
+    
     indices.push_back(baseVertexOffset + 0);
     indices.push_back(baseVertexOffset + 1);
     indices.push_back(baseVertexOffset + 2);
@@ -145,27 +172,23 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
     indices.push_back(baseVertexOffset + 2);
     indices.push_back(baseVertexOffset + 3);
 
-    // 2. 生成连接地形边缘和底座的侧壁 ("幕墙")
     auto addSideWall = [&](int idx1, int idx2, const glm::vec3& normal) {
-        unsigned int currentOffset = vertices.size() / 8;
+        unsigned int currentOffset = vertices.size();
         
-        // 获取地形边缘的两个顶点
         glm::vec3 p_top1 = positions[idx1];
         glm::vec3 p_top2 = positions[idx2];
         glm::vec2 uv1 = uvs[idx1];
         glm::vec2 uv2 = uvs[idx2];
 
-        // 计算对应的底部顶点
         glm::vec3 p_bottom1 = {p_top1.x, -baseHeight, p_top1.z};
         glm::vec3 p_bottom2 = {p_top2.x, -baseHeight, p_top2.z};
 
-        // 添加4个顶点构成一个四边形
-        vertices.insert(vertices.end(), { p_top1.x, p_top1.y, p_top1.z, normal.x, normal.y, normal.z, uv1.x, uv1.y });
-        vertices.insert(vertices.end(), { p_bottom1.x, p_bottom1.y, p_bottom1.z, normal.x, normal.y, normal.z, uv1.x, 0.0f }); // UV的V坐标设为0
-        vertices.insert(vertices.end(), { p_bottom2.x, p_bottom2.y, p_bottom2.z, normal.x, normal.y, normal.z, uv2.x, 0.0f });
-        vertices.insert(vertices.end(), { p_top2.x, p_top2.y, p_top2.z, normal.x, normal.y, normal.z, uv2.x, uv2.y });
+        // 为所有成员提供初始值
+        vertices.push_back({p_top1,    normal, {uv1.x, uv1.y}, zeroVec, zeroVec, 0.0f});
+        vertices.push_back({p_bottom1, normal, {uv1.x, 0.0f},  zeroVec, zeroVec, 0.0f});
+        vertices.push_back({p_bottom2, normal, {uv2.x, 0.0f},  zeroVec, zeroVec, 0.0f});
+        vertices.push_back({p_top2,    normal, {uv2.x, uv2.y}, zeroVec, zeroVec, 0.0f});
 
-        // 添加索引
         indices.push_back(currentOffset + 0);
         indices.push_back(currentOffset + 1);
         indices.push_back(currentOffset + 2);
@@ -174,46 +197,69 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         indices.push_back(currentOffset + 3);
     };
 
+    // 使用正确的索引逻辑生成四个侧壁 ---
     int res = resolution;
-    // 生成四个侧壁
     for (int i = 0; i < res; ++i) {
-        // 后侧壁 (z = -halfD)
-        addSideWall(i, i + 1, glm::vec3(0, 0, -1));
-        // 前侧壁 (z = halfD)
-        addSideWall((res * (res + 1)) + i + 1, (res * (res + 1)) + i, glm::vec3(0, 0, 1));
-        // 左侧壁 (x = -halfW)
-        addSideWall((i * (res + 1)), ((i + 1) * (res + 1)), glm::vec3(-1, 0, 0));
-        // 右侧壁 (x = halfW)
-        addSideWall(((i + 1) * (res + 1)) + res, (i * (res + 1)) + res, glm::vec3(1, 0, 0));
+        // 后侧壁 (z 最小)
+        addSideWall(i + 1, i, glm::vec3(0, 0, -1));
+        // 前侧壁 (z 最大)
+        addSideWall(res * (res + 1) + i, res * (res + 1) + i + 1, glm::vec3(0, 0, 1));
+        // 左侧壁 (x 最小)
+        addSideWall(i * (res + 1), (i + 1) * (res + 1), glm::vec3(-1, 0, 0));
+        // 右侧壁 (x 最大)
+        addSideWall((i + 1) * (res + 1) + res, i * (res + 1) + res, glm::vec3(1, 0, 0));
     }
 
     indexCount = indices.size();
+    this->terrainPositions = positions; // 更新碰撞检测用的位置
 }
 
-void TerrainSandbox::setupMesh() {
+void TerrainSandbox::setupMesh(Shader& shader) {
     glGenVertexArrays(1, &VAO);
     glGenBuffers(1, &VBO);
     glGenBuffers(1, &EBO);
 
     glBindVertexArray(VAO);
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
-    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(float), &vertices[0], GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(TerrainVertex), &vertices[0], GL_STATIC_DRAW);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
 
-    // 位置属性
-    glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    // 使用glGetAttribLocation查询属性位置，而非硬编码
+    GLint posAttrib = glGetAttribLocation(shader.ID, "aPos");
+    GLint normalAttrib = glGetAttribLocation(shader.ID, "aNormal");
+    GLint texAttrib = glGetAttribLocation(shader.ID, "aTexCoords");
+    GLint tangentAttrib = glGetAttribLocation(shader.ID, "aTangent");
+    GLint bitangentAttrib = glGetAttribLocation(shader.ID, "aBitangent");
+    GLint isTopAttrib = glGetAttribLocation(shader.ID, "aIsTopSurface"); 
 
-    // 法线属性
-    glEnableVertexAttribArray(1);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-
-    // 纹理坐标属性
-    glEnableVertexAttribArray(2);
-    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-
+    // 检查是否找到了属性
+    if (posAttrib != -1) {
+        glEnableVertexAttribArray(posAttrib);
+        glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, sizeof(TerrainVertex), (void*)offsetof(TerrainVertex, Position));
+    }
+    if (normalAttrib != -1) {
+        glEnableVertexAttribArray(normalAttrib);
+        glVertexAttribPointer(normalAttrib, 3, GL_FLOAT, GL_FALSE, sizeof(TerrainVertex), (void*)offsetof(TerrainVertex, Normal));
+    }
+    if (texAttrib != -1) {
+        glEnableVertexAttribArray(texAttrib);
+        glVertexAttribPointer(texAttrib, 2, GL_FLOAT, GL_FALSE, sizeof(TerrainVertex), (void*)offsetof(TerrainVertex, TexCoords));
+    }
+    if (tangentAttrib != -1) {
+        glEnableVertexAttribArray(tangentAttrib);
+        glVertexAttribPointer(tangentAttrib, 3, GL_FLOAT, GL_FALSE, sizeof(TerrainVertex), (void*)offsetof(TerrainVertex, Tangent));
+    }
+    if (bitangentAttrib != -1) {
+        glEnableVertexAttribArray(bitangentAttrib);
+        glVertexAttribPointer(bitangentAttrib, 3, GL_FLOAT, GL_FALSE, sizeof(TerrainVertex), (void*)offsetof(TerrainVertex, Bitangent));
+    }
+    if (isTopAttrib != -1) {
+        glEnableVertexAttribArray(isTopAttrib);
+        glVertexAttribPointer(isTopAttrib, 1, GL_FLOAT, GL_FALSE, sizeof(TerrainVertex), (void*)offsetof(TerrainVertex, isTopSurface));
+    }
+    
     glBindVertexArray(0);
 }
 
@@ -289,6 +335,8 @@ unsigned int TerrainSandbox::loadTexture(const char* path) {
 // getHeight 函数的实现
 float barryCentric(glm::vec3 p1, glm::vec3 p2, glm::vec3 p3, glm::vec2 pos) {
     float det = (p2.z - p3.z) * (p1.x - p3.x) + (p3.x - p2.x) * (p1.z - p3.z);
+    // 增加一个除零保护
+    if (abs(det) < 1e-6) return p1.y;
     float l1 = ((p2.z - p3.z) * (pos.x - p3.x) + (p3.x - p2.x) * (pos.y - p3.z)) / det;
     float l2 = ((p3.z - p1.z) * (pos.x - p3.x) + (p1.x - p3.x) * (pos.y - p3.z)) / det;
     float l3 = 1.0f - l1 - l2;
@@ -300,17 +348,16 @@ float TerrainSandbox::getHeight(float worldX, float worldZ) {
     float terrainX = (worldX / terrainWidth) + 0.5f;
     float terrainZ = (worldZ / terrainDepth) + 0.5f;
 
-    // 增加严格的边界检查
-    // 如果粒子在地形的XZ范围之外，直接返回一个极低的高度，避免后续计算崩溃
+    // 边界检查
     if (terrainX < 0.0f || terrainX > 1.0f || terrainZ < 0.0f || terrainZ > 1.0f) {
-        return -1000.0f; // 返回一个安全值
+        return -1000.0f; 
     }
 
     // 计算在哪个网格单元
     int gridX = static_cast<int>(floor(terrainX * terrainResolution));
     int gridZ = static_cast<int>(floor(terrainZ * terrainResolution));
 
-    // --- 增加索引安全检查 ---
+    // 索引安全检查
     if (gridX >= terrainResolution || gridZ >= terrainResolution || gridX < 0 || gridZ < 0) {
         return -1000.0f;
     }
@@ -326,11 +373,17 @@ float TerrainSandbox::getHeight(float worldX, float worldZ) {
     glm::vec3 p3 = terrainPositions[((gridZ + 1) * (res + 1)) + gridX];
     glm::vec3 p4 = terrainPositions[((gridZ + 1) * (res + 1)) + gridX + 1];
 
+    // --- 关键修复：使用正确的坐标进行重心插值 ---
+    // 我们需要将单元格内的坐标 (xCoord, zCoord) 转换为与 p1,p2,p3 相同的局部模型坐标系
+    float interpolatedX = p1.x + (p2.x - p1.x) * xCoord;
+    float interpolatedZ = p1.z + (p3.z - p1.z) * zCoord;
+    glm::vec2 localPos(interpolatedX, interpolatedZ);
+
     // 根据在哪个三角形中进行重心插值
-    if (xCoord + zCoord < 1) { // 左上三角形
-        return barryCentric(p1, p2, p3, glm::vec2(worldX, worldZ));
-    } else { // 右下三角形
-        return barryCentric(p2, p4, p3, glm::vec2(worldX, worldZ));
+    if (xCoord + zCoord < 1) { // 左上三角形 (p1, p2, p3)
+        return barryCentric(p1, p2, p3, localPos);
+    } else { // 右下三角形 (p2, p4, p3)
+        return barryCentric(p2, p4, p3, localPos);
     }
 }
 
@@ -421,7 +474,7 @@ void TerrainSandbox::addSnow(float worldX, float worldZ) {
 
     paintShader.use();
     paintShader.setVec2("center", glm::vec2(u, v));
-    paintShader.setFloat("radius", 0.15f); 
+    paintShader.setFloat("radius", 0.3f); 
     paintShader.setFloat("scale", (float)growthTextureSize);
     // 绘制到绿色通道
     paintShader.setVec3("paintColor", glm::vec3(0.0f, 1.0f, 0.0f)); 

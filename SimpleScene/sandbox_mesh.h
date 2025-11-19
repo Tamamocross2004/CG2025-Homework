@@ -8,6 +8,15 @@
 // #include "stb_image.h"
 #include <iostream>
 
+struct TerrainVertex {
+    glm::vec3 Position;
+    glm::vec3 Normal;
+    glm::vec2 TexCoords;
+    glm::vec3 Tangent;     
+    glm::vec3 Bitangent;   
+    float isTopSurface;
+};
+
 class TerrainSandbox {
 public:
     // 地形生成方法枚举
@@ -20,6 +29,9 @@ public:
     TerrainSandbox(float width, float depth, int resolution, GenMethod method, const char* heightmapPath, const char* diffusePath, const char* grassPath, const char* snowPath, const char* normalPath);
     // 析构函数
     ~TerrainSandbox();
+
+    // 设置OpenGL缓冲
+    void setupMesh(Shader& shader);
 
     // 绘制沙盘
     void Draw(Shader& shader);
@@ -37,8 +49,8 @@ public:
     void addSnow(float worldX, float worldZ);
 
 private:
+    std::vector<TerrainVertex> vertices;
     unsigned int VAO, VBO, EBO;
-    std::vector<float> vertices;
     std::vector<unsigned int> indices;
     unsigned int diffuseTexture;
     unsigned int normalTexture;
@@ -61,8 +73,7 @@ private:
 
     // 生成顶点数据
     void generateMesh(float width, float depth, int resolution, GenMethod method, const char* heightmapPath);
-    // 设置OpenGL缓冲
-    void setupMesh();
+
     // 加载纹理
     unsigned int loadTexture(const char* path);
 
