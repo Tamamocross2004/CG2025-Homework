@@ -1,6 +1,6 @@
 #include "model.h" 
 
-#define STB_IMAGE_IMPLEMENTATION
+// #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
 // 将函数的实现放在这里

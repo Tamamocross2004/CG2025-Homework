@@ -1,5 +1,7 @@
 ﻿#include <glad/glad.h>
 #include <GLFW/glfw3.h>
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -7,11 +9,11 @@
 
 #include "shader.h"
 #include "camera.h"
-// #define STB_IMAGE_IMPLEMENTATION
+
 #include "model.h"
 #include "sandbox_mesh.h"
 #include "particle_system.h"
-#include "stb_image.h"
+#include "lightning.h"
 
 #include <iostream>
 #include <vector>
@@ -106,6 +108,13 @@ int main()
     Shader modelShader("model_loading.vs", "model_loading.fs");
     Shader sandboxShader("sandbox.vs", "sandbox.fs");
     Shader cloudShader("cloud.vs", "cloud.fs");
+    // --- 1. 初始化雷电 Shader (在 main 中安全创建) ---
+    Shader* lightningShader = nullptr;
+    try {
+        lightningShader = new Shader("lightning.vs", "lightning.fs");
+    } catch (...) {
+        std::cout << "ERROR: Failed to load lightning shader!" << std::endl;
+    }
 
     // --- 加载模型 ---
     Model ourModel("resource/model/table3.obj");
@@ -158,6 +167,30 @@ int main()
         std::cout << "Failed to load cloud texture" << std::endl;
     }
     stbi_image_free(data);
+    // --- 2. 加载雷电纹理 (强制 4 通道以避免崩溃) ---
+    unsigned int lightningTexture;
+    glGenTextures(1, &lightningTexture);
+    glBindTexture(GL_TEXTURE_2D, lightningTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int lw, lh, lnr;
+    // 关键：最后一个参数传 4，强制加载为 RGBA 格式
+    unsigned char *ldata = stbi_load("resource/textures/lightning.png", &lw, &lh, &lnr, 4);
+    if (ldata) {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, lw, lh, 0, GL_RGBA, GL_UNSIGNED_BYTE, ldata);
+        glGenerateMipmap(GL_TEXTURE_2D);
+    } else {
+        std::cout << "Failed to load lightning texture" << std::endl;
+    }
+    stbi_image_free(ldata);
+
+    // --- 3. 创建 Lightning 对象 ---
+    Lightning* lightning = nullptr;
+    if (lightningShader) {
+        lightning = new Lightning(lightningShader, lightningTexture);
+    }
 
     // --- 创建云的平面顶点 ---
     float cloudVertices[] = {
@@ -314,6 +347,11 @@ int main()
         // -----
         processInput(window);
 
+        // --- 4. 更新雷电逻辑 ---
+        if (lightning) {
+            lightning->Update(deltaTime, isRaining, sandbox_heightmap);
+        }
+
         // 开始渲染
         // ------
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
@@ -330,6 +368,11 @@ int main()
         glm::vec3 warmColor(1.0f, 0.85f, 0.6f);
         float overallIntensity = 1.0f; // 整体亮度
         glm::vec3 finalLightColor = warmColor * overallIntensity;
+
+        // --- 5. 如果打雷，增强光照 ---
+        if (lightning && lightning->IsActive()) {
+            finalLightColor = glm::vec3(0.8f, 0.9f, 1.0f) * 5.0f; // 蓝白色强光
+        }
 
         // 确保在设置 Uniforms/Drawing 之前激活 Shader
         //---------------------------------------------------------------------
@@ -581,6 +624,11 @@ int main()
             // 绘制完毕后禁用混合，以免影响其他物体
             glDisable(GL_BLEND);
 
+            // --- 6. 绘制雷电 ---
+            if (lightning) {
+                lightning->Draw(view, projection, camera.Position, cloudWorldCenter, sandboxWorldPos);
+            }
+
             // --- 更新和绘制粒子 ---
             if (isRaining)
             {
@@ -614,6 +662,10 @@ int main()
     glDeleteBuffers(1, &wallVBO);
     glDeleteBuffers(1, &cloudVBO); // <-- 清理云VBO
     glDeleteBuffers(1, &cloudEBO); // <-- 清理云EBO
+    
+    // --- 7. 清理雷电资源 ---
+    if (lightning) delete lightning;
+    if (lightningShader) delete lightningShader;
 
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------

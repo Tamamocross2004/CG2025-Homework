@@ -1,36 +1,10 @@
-﻿  main.cpp
-D:\code\OpenGL\Project\Homework1\SimpleScene\model.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“main.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\mesh.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“main.cpp”)
+﻿  lightning.cpp
+D:\code\OpenGL\Project\Homework1\SimpleScene\lightning.cpp(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
+D:\code\OpenGL\Project\Homework1\SimpleScene\lightning.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
+  (编译源文件“lightning.cpp”)
   
 D:\code\OpenGL\Project\Homework1\SimpleScene\sandbox_mesh.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“main.cpp”)
+  (编译源文件“lightning.cpp”)
   
-D:\code\OpenGL\Project\Homework1\SimpleScene\particle_system.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“main.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(244,27): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(248,33): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(449,51): warning C4305: “参数”: 从“double”到“float”截断
-  particle_system.cpp
-D:\code\OpenGL\Project\Homework1\SimpleScene\particle_system.cpp(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-D:\code\OpenGL\Project\Homework1\SimpleScene\particle_system.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“particle_system.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\sandbox_mesh.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“particle_system.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\particle_system.cpp(141,63): warning C4267: “参数”: 从“size_t”转换到“GLsizei”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\particle_system.cpp(145,63): warning C4267: “参数”: 从“size_t”转换到“GLsizei”，可能丢失数据
-  sandbox_mesh.cpp
-D:\code\OpenGL\Project\Homework1\SimpleScene\sandbox_mesh.cpp(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-D:\code\OpenGL\Project\Homework1\SimpleScene\sandbox_mesh.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“sandbox_mesh.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\sandbox_mesh.cpp(160,35): warning C4267: “初始化”: 从“size_t”转换到“unsigned int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\sandbox_mesh.cpp(176,36): warning C4267: “初始化”: 从“size_t”转换到“unsigned int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\sandbox_mesh.cpp(213,30): warning C4267: “=”: 从“size_t”转换到“int”，可能丢失数据
-  正在生成代码...
+LINK : warning LNK4098: 默认库“MSVCRT”与其他库的使用冲突；请使用 /NODEFAULTLIB:library
   SimpleScene.vcxproj -> D:\code\OpenGL\Project\Homework1\SimpleScene\x64\Debug\SimpleScene.exe

@@ -33,6 +33,9 @@
     <ClInclude Include="particle_system.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="lightning.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="lightcube.fs">
@@ -62,6 +65,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="particle_system.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="lightning.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
