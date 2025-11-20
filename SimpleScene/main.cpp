@@ -662,7 +662,7 @@ int main()
     glDeleteBuffers(1, &wallVBO);
     glDeleteBuffers(1, &cloudVBO); // <-- 清理云VBO
     glDeleteBuffers(1, &cloudEBO); // <-- 清理云EBO
-    
+
     // --- 7. 清理雷电资源 ---
     if (lightning) delete lightning;
     if (lightningShader) delete lightningShader;
@@ -947,11 +947,37 @@ std::vector<float> generateCircularWindowVertices(int segments, float outerRadiu
     add3DRect(-0.8f * innerRadius, -0.2f * innerRadius, -0.4f * innerRadius, -0.2f * innerRadius + barWidth);
 
     // 添加斜线
-    // (为简化，斜线用一个很平的矩形表示，而不是精确的斜边)
-    add3DRect(0.2f * innerRadius, 0.4f * innerRadius - barWidth, 0.4f * innerRadius + barWidth, 0.2f * innerRadius);
-    add3DRect(-0.4f * innerRadius - barWidth, 0.2f * innerRadius, -0.2f * innerRadius, 0.4f * innerRadius + barWidth);
-    add3DRect(-0.4f * innerRadius - barWidth, -0.2f * innerRadius, -0.2f * innerRadius, -0.4f * innerRadius - barWidth);
-    add3DRect(0.2f * innerRadius, -0.4f * innerRadius - barWidth, 0.4f * innerRadius + barWidth, -0.2f * innerRadius);
+    // ---------------------------------------------------------
+    // 定义一个临时辅助函数来绘制任意角度的线段
+    auto addLine = [&](glm::vec2 start, glm::vec2 end, float width) {
+        glm::vec2 dir = glm::normalize(end - start);
+        glm::vec2 perp(-dir.y, dir.x); // 计算垂直向量
+        glm::vec2 offset = perp * (width * 0.5f);
+
+        // 计算线段四个角的坐标
+        glm::vec2 p1 = start + offset; // 起点外侧
+        glm::vec2 p2 = start - offset; // 起点内侧
+        glm::vec2 p3 = end - offset;   // 终点内侧
+        glm::vec2 p4 = end + offset;   // 终点外侧
+
+        // 使用 add3DStrip 绘制 (参数顺序: inner1, outer1, inner2, outer2)
+        add3DStrip(p2, p1, p3, p4);
+    };
+    // 定义斜线的宽度 
+    float diagonalWidth = barWidth * 1.5f;
+
+    // 第一象限 (右上) - 旋转90度：连接 (0.4, 0.2) 和 (0.2, 0.4)
+    addLine({0.45f * innerRadius, 0.15f * innerRadius}, {0.15f * innerRadius, 0.45f * innerRadius}, diagonalWidth);
+    
+    // 第二象限 (左上) - 旋转90度：连接 (-0.2, 0.4) 和 (-0.4, 0.2)
+    addLine({-0.15f * innerRadius, 0.45f * innerRadius}, {-0.45f * innerRadius, 0.15f * innerRadius}, diagonalWidth);
+    
+    // 第三象限 (左下) - 旋转90度：连接 (-0.4, -0.2) 和 (-0.2, -0.4)
+    addLine({-0.45 * innerRadius, -0.15f * innerRadius}, {-0.15f * innerRadius, -0.45f * innerRadius}, diagonalWidth);
+    
+    // 第四象限 (右下) - 旋转90度：连接 (0.2, -0.4) 和 (0.4, -0.2)
+    addLine({0.15f * innerRadius, -0.45f * innerRadius}, {0.45f * innerRadius, -0.15f * innerRadius}, diagonalWidth);
+    // ---------------------------------------------------------
 
     // 在每个象限的中间画一条水平和一条垂直线
     add3DRect(-0.85f * innerRadius, 0.6f * innerRadius - 0.5f * barWidth, 0.85f * innerRadius, 0.6f * innerRadius + 0.5f * barWidth); // 上
