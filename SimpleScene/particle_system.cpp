@@ -29,7 +29,7 @@ ParticleSystem::~ParticleSystem() {
     glDeleteBuffers(1, &VBO);
 }
 
-void ParticleSystem::resetParticle(Particle& particle, const glm::vec3& cloudCenter) {
+void ParticleSystem::resetParticle(Particle& particle, const glm::vec3& cloudCenter, EffectType effect) {
     // 在云的范围内随机生成位置
     // 将X轴范围扩大以匹配云的宽度
     float randX = glm::linearRand(-1.0f, 1.0f);
@@ -42,16 +42,23 @@ void ParticleSystem::resetParticle(Particle& particle, const glm::vec3& cloudCen
     // 设置初始位置
     particle.position = cloudCenter + particle.initialOffset;
 
-    // 设置一个随机的下落速度
-    float gravity = 9.8f;
-    particle.velocity = glm::vec3(0.0f, -gravity * glm::linearRand(0.5f, 1.5f), 0.0f);
-    particle.life = 1.0f;
+    particle.life = 1.0f; 
+
+    // 根据效果类型设置不同的初始速度
+    if (effect == EffectType::SNOW) {
+        // 雪花：初始速度很慢
+        particle.velocity = glm::vec3(0.0f, -1.0f, 0.0f); 
+    } else {
+        // 雨滴：初始速度较快，且受重力影响大
+        float gravity = 9.8f;
+        particle.velocity = glm::vec3(0.0f, -gravity * glm::linearRand(0.5f, 1.5f), 0.0f);
+    }
 }
 
 void ParticleSystem::Update(float dt, const glm::vec3& cloudCenter, const glm::vec3& terrainWorldPos, EffectType effect){
     for(auto& p : particles){
         if(p.life <= 0.0f){
-            resetParticle(p, cloudCenter);
+            resetParticle(p, cloudCenter, effect);
         }
         
         // 粒子的水平位置 = 当前云的中心 + 它的初始随机偏移

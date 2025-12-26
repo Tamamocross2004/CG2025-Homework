@@ -26,8 +26,8 @@ private:
     bool newLightningStrike;
     glm::vec3 lightningStrikePos;
 
-    Shader* shader;         // 借用的指针，不负责删除
-    unsigned int textureID; // 借用的ID，不负责删除
+    Shader* shader;         
+    unsigned int textureID; 
     unsigned int VAO, VBO, EBO;
 
     void setupMesh();

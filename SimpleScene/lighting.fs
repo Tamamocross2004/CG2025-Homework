@@ -9,6 +9,16 @@ uniform vec3 viewPos;
 uniform vec3 lightColor;
 uniform vec3 objectColor;
 
+// 台灯点光源
+struct PointLight {
+    vec3 position;
+    vec3 color;
+    float intensity;
+};
+
+uniform PointLight lampLight;
+uniform bool lampOn;
+
 void main()
 {
     // 环境光
@@ -29,5 +39,24 @@ void main()
     vec3 specular = specularStrength * spec * lightColor;  
         
     vec3 result = (ambient + diffuse + specular) * objectColor;
+
+    // 台灯点光源
+    if (lampOn) {
+        vec3 L = normalize(lampLight.position - FragPos);
+        float d = length(lampLight.position - FragPos);
+        
+        // 衰减
+        float att = 1.0 / (1.0 + 0.35 * d + 0.44 * d * d);
+        
+        float diffL = max(dot(norm, L), 0.0);
+        vec3 diffuseL = lampLight.color * diffL * objectColor;
+        
+        vec3 R = reflect(-L, norm);
+        float specL = pow(max(dot(viewDir, R), 0.0), 16.0);
+        vec3 specularL = lampLight.color * specL * objectColor * 0.5;
+        
+        result += (diffuseL + specularL) * lampLight.intensity * att;
+    }
+  
     FragColor = vec4(result, 1.0);
 } 

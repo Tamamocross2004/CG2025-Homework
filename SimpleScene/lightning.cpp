@@ -19,7 +19,6 @@ Lightning::~Lightning() {
     glDeleteVertexArrays(1, &VAO);
     glDeleteBuffers(1, &VBO);
     glDeleteBuffers(1, &EBO);
-    // shader 和 textureID 由 main 管理，这里不删除
 }
 
 void Lightning::setupMesh() {
@@ -57,8 +56,8 @@ void Lightning::setupMesh() {
 }
 
 void Lightning::resetTimer() {
-    // 随机设置下一次闪电的时间（例如 5 到 15 秒之间）
-    timeToNextLightning = 5.0f + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (15.0f - 5.0f)));
+    // 随机设置下一次闪电的时间（例如 5 到 10 秒之间）
+    timeToNextLightning = 5.0f + static_cast<float>(rand()) / (static_cast<float>(RAND_MAX / (10.0f - 5.0f)));
 }
 
 void Lightning::Update(float deltaTime, bool isRaining, TerrainSandbox& terrain) {
@@ -115,8 +114,6 @@ void Lightning::Draw(const glm::mat4& view, const glm::mat4& projection, const g
 
     glm::mat4 model = glm::mat4(1.0f);
     model = glm::translate(model, center);
-    // 这里可以添加旋转逻辑让闪电总是面向摄像机，或者在 Shader 中处理
-    // 简单起见，我们只做缩放
     model = glm::scale(model, glm::vec3(width, height, 1.0f));
 
     glEnable(GL_BLEND);

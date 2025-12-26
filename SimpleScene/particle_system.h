@@ -32,8 +32,8 @@ public:
 
 private:
     // 重置单个粒子，让它回到云中
-    void resetParticle(Particle& particle, const glm::vec3& cloudCenter);
-
+    void resetParticle(Particle& particle, const glm::vec3& cloudCenter, EffectType effect);
+    
     std::vector<Particle> particles;
     unsigned int maxParticles;
     TerrainSandbox* terrain; // 用于碰撞检测的地形指针

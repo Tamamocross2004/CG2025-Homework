@@ -23,6 +23,11 @@
 #define M_PI 3.14159265358979323846
 #endif
 
+bool lampOn = false; // 台灯是否打开
+glm::vec3 lampModelWorldPos(0.0f); // 台灯在世界坐标系中的位置
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods); // 鼠标点击回调函数
+bool rayHitLamp(const glm::vec3& rayOrigin, const glm::vec3& rayDir); // 射线检测函数，判断是否击中台灯
+
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
@@ -84,6 +89,7 @@ int main()
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, scroll_callback);
+    glfwSetMouseButtonCallback(window, mouse_button_callback); // 注册鼠标点击回调函数
 
     // 告诉 GLFW 我们要捕获鼠标
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -108,7 +114,7 @@ int main()
     Shader modelShader("model_loading.vs", "model_loading.fs");
     Shader sandboxShader("sandbox.vs", "sandbox.fs");
     Shader cloudShader("cloud.vs", "cloud.fs");
-    // --- 1. 初始化雷电 Shader (在 main 中安全创建) ---
+    // 初始化雷电 Shader
     Shader* lightningShader = nullptr;
     try {
         lightningShader = new Shader("lightning.vs", "lightning.fs");
@@ -167,7 +173,7 @@ int main()
         std::cout << "Failed to load cloud texture" << std::endl;
     }
     stbi_image_free(data);
-    // --- 2. 加载雷电纹理 (强制 4 通道以避免崩溃) ---
+    // 加载雷电纹理
     unsigned int lightningTexture;
     glGenTextures(1, &lightningTexture);
     glBindTexture(GL_TEXTURE_2D, lightningTexture);
@@ -176,7 +182,7 @@ int main()
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     int lw, lh, lnr;
-    // 关键：最后一个参数传 4，强制加载为 RGBA 格式
+    // 最后一个参数传 4，强制加载为 RGBA 格式
     unsigned char *ldata = stbi_load("resource/textures/lightning.png", &lw, &lh, &lnr, 4);
     if (ldata) {
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, lw, lh, 0, GL_RGBA, GL_UNSIGNED_BYTE, ldata);
@@ -186,7 +192,7 @@ int main()
     }
     stbi_image_free(ldata);
 
-    // --- 3. 创建 Lightning 对象 ---
+    // 创建 Lightning 对象
     Lightning* lightning = nullptr;
     if (lightningShader) {
         lightning = new Lightning(lightningShader, lightningTexture);
@@ -347,7 +353,7 @@ int main()
         // -----
         processInput(window);
 
-        // --- 4. 更新雷电逻辑 ---
+        // 雷电逻辑
         if (lightning) {
             lightning->Update(deltaTime, isRaining, sandbox_heightmap);
         }
@@ -366,7 +372,7 @@ int main()
 
         // 整体光照强度
         glm::vec3 warmColor(1.0f, 0.85f, 0.6f);
-        float overallIntensity = 1.0f; // 整体亮度
+        float overallIntensity = 0.5f; // 整体亮度
         glm::vec3 finalLightColor = warmColor * overallIntensity;
 
         // --- 5. 如果打雷，增强光照 ---
@@ -377,9 +383,17 @@ int main()
         // 确保在设置 Uniforms/Drawing 之前激活 Shader
         //---------------------------------------------------------------------
         lightingShader.use();
-        lightingShader.setVec3("lightPos", lightPos); // <--- 使用新的光源位置
+        lightingShader.setVec3("lightPos", lightPos); 
         lightingShader.setVec3("viewPos", camera.Position);
         lightingShader.setVec3("lightColor", finalLightColor);
+
+        // 设置台灯点光源
+        glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
+        glm::vec3 lampColor(1.0f, 0.9f, 0.7f);
+        lightingShader.setBool("lampOn", lampOn);
+        lightingShader.setVec3("lampLight.position", lampLightPos);
+        lightingShader.setVec3("lampLight.color",    lampColor);
+        lightingShader.setFloat("lampLight.intensity", lampOn ? 2.0f : 0.0f);
 
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = camera.GetViewMatrix();
@@ -520,17 +534,27 @@ int main()
             modelShader.setMat4("projection", projection);
             modelShader.setMat4("view", view);
 
-            // 设置光照
+            // 设置房顶灯
             modelShader.setVec3("viewPos", camera.Position);
-            modelShader.setVec3("light.position", lightPos); // <--- 使用新的光源位置
+            modelShader.setVec3("light.position", lightPos); 
             modelShader.setVec3("light.ambient", finalLightColor * 0.2f);
             modelShader.setVec3("light.diffuse", finalLightColor);
             modelShader.setVec3("light.specular", finalLightColor * 0.2f);
-        
-            // 渲染桌子的模型
+
+            // 设置台灯点光源
+            // 台灯灯光位置 在灯模型中心上方一些
+            glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
+            glm::vec3 lampColor(1.0f, 0.9f, 0.7f); // 略偏暖黄的颜色
+            modelShader.setBool("lampOn", lampOn);
+            modelShader.setVec3("lampLight.position", lampLightPos);
+            modelShader.setVec3("lampLight.color",    lampColor);
+            modelShader.setFloat("lampLight.intensity", lampOn ? 2.0f : 0.0f);
+            modelShader.setBool("isLampModel", false);
+
+            // 渲染书桌模型
             model = glm::mat4(1.0f);
             model = glm::translate(model, sceneOrigin + glm::vec3(0.0f, -3.0f, 0.0f));
-            model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.7f));	// 书桌的模型
+            model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.7f));	// 书桌模型
             model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // 旋转90度，使桌子朝前
             modelShader.setMat4("model", model);
             ourModel.Draw(modelShader);
@@ -538,12 +562,19 @@ int main()
 
         // --- 绘制台灯模型 ---
         {
-            // modelShader 已经激活，且 view/projection/light 等 uniform 已设置
-            // 所以只需要为台灯设置一个新的 model 矩阵
+            // 设置台灯点光源的 uniform
+            glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
+            glm::vec3 lampColor(1.0f, 0.9f, 0.7f);
+            modelShader.setBool("lampOn", lampOn);
+            modelShader.setVec3("lampLight.position", lampLightPos);
+            modelShader.setVec3("lampLight.color",    lampColor);
+            modelShader.setFloat("lampLight.intensity", lampOn ? 2.0f : 0.0f);
+            modelShader.setBool("isLampModel", true);
+            // 为台灯设置一个新的 model 矩阵
             modelShader.use(); 
             model = glm::mat4(1.0f);
             // 把台灯移动到桌子上的一个偏左位置
-            glm::vec3 lampModelWorldPos = sceneOrigin + glm::vec3(-1.0f, -0.8f, -0.5f);
+            lampModelWorldPos = sceneOrigin + glm::vec3(-1.0f, -0.8f, -0.5f);
             model = glm::translate(model, lampModelWorldPos); // 使用计算好的世界坐标
             model = glm::scale(model, glm::vec3(0.3f)); // 调整台灯使尺寸合适
             modelShader.setMat4("model", model);
@@ -557,8 +588,14 @@ int main()
             sandboxShader.setMat4("projection", projection);
             sandboxShader.setMat4("view", view);
             sandboxShader.setVec3("viewPos", camera.Position);
-            sandboxShader.setVec3("lightPos", lightPos); // <--- 使用新的光源位置
+            sandboxShader.setVec3("lightPos", lightPos); 
             sandboxShader.setVec3("lightColor", finalLightColor);
+
+            // 设置台灯点光源(世界空间位置, 由顶点着色器转换到切线空间)
+            sandboxShader.setVec3("lampLightPos", lampLightPos);
+            sandboxShader.setBool("lampOn", lampOn);
+            sandboxShader.setVec3("lampLight.color", lampColor);
+            sandboxShader.setFloat("lampLight.intensity", lampOn ? 2.0f : 0.0f);    
 
             model = glm::mat4(1.0f);
             // 将沙盘放在书桌上
@@ -570,7 +607,7 @@ int main()
             // sandbox_procedural.Draw(sandboxShader);
         }
 
-        // --- 绘制雨云 (如果可见) ---
+        // 绘制雨云 (如果可见) 
         // 沙盘的世界位置应该只在这里定义一次
         glm::vec3 sandboxWorldPos = sceneOrigin + glm::vec3(0.5f, -1.4f, -1.0f);
         // 云的世界中心位置，Y值基于沙盘和云的偏移量
@@ -586,12 +623,12 @@ int main()
             cloudShader.setMat4("projection", projection);
             cloudShader.setMat4("view", view);
 
-            // 绑定云纹理 (只需要绑定一次)
+            // 绑定云纹理
             glActiveTexture(GL_TEXTURE0);
             cloudShader.setInt("cloudTexture", 0);
             glBindTexture(GL_TEXTURE_2D, cloudTexture);
 
-            // --- 使用分层渲染来增加云的厚度 ---
+            // 使用分层渲染来增加云的厚度
             const int numCloudLayers = 10; // 定义云的层数
             const float layerSpacing = 0.01f; // 定义每层之间的间距
 
@@ -624,12 +661,12 @@ int main()
             // 绘制完毕后禁用混合，以免影响其他物体
             glDisable(GL_BLEND);
 
-            // --- 6. 绘制雷电 ---
+            // 绘制雷电
             if (lightning) {
                 lightning->Draw(view, projection, camera.Position, cloudWorldCenter, sandboxWorldPos);
             }
 
-            // --- 更新和绘制粒子 ---
+            // 更新和绘制粒子
             if (isRaining)
             {
                 rainSystem.Update(deltaTime, cloudWorldCenter, sandboxWorldPos, ParticleSystem::EffectType::GROWTH);
@@ -656,14 +693,14 @@ int main()
     glDeleteVertexArrays(1, &lightCubeVAO);
     glDeleteVertexArrays(1, &windowVAO);
     glDeleteVertexArrays(1, &wallVAO);
-    glDeleteVertexArrays(1, &cloudVAO); // <-- 清理云VAO
+    glDeleteVertexArrays(1, &cloudVAO); 
     glDeleteBuffers(1, &roomVBO);
     glDeleteBuffers(1, &windowVBO);
     glDeleteBuffers(1, &wallVBO);
-    glDeleteBuffers(1, &cloudVBO); // <-- 清理云VBO
-    glDeleteBuffers(1, &cloudEBO); // <-- 清理云EBO
+    glDeleteBuffers(1, &cloudVBO); 
+    glDeleteBuffers(1, &cloudEBO);
 
-    // --- 7. 清理雷电资源 ---
+    // 清理雷电资源 
     if (lightning) delete lightning;
     if (lightningShader) delete lightningShader;
 
@@ -776,6 +813,72 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     lastY = ypos;
 
     camera.ProcessMouseMovement(xoffset, yoffset);
+}
+
+void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
+{
+    // 只在按下左键时进行处理
+    if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
+    {
+        // 使用屏幕中心作为选取点
+        float x = SCR_WIDTH * 0.5f;
+        float y = SCR_HEIGHT * 0.5f;
+
+        // 转换到标准设备坐标(NDC)
+        float ndcX = 2.0f * x / SCR_WIDTH - 1.0f;
+        float ndcY = 1.0f - 2.0f * y / SCR_HEIGHT; // Y轴反转
+        glm::vec4 clip(ndcX, ndcY, -1.0f, 1.0f);
+
+        // 构造当前的投影矩阵和视图矩阵
+        glm::mat4 projection = glm::perspective(
+            glm::radians(camera.Zoom),
+            float(SCR_WIDTH) / float(SCR_HEIGHT),
+            0.1f,
+            100.0f
+        );
+        glm::mat4 view = camera.GetViewMatrix();
+
+        glm::mat4 invVP = glm::inverse(projection * view);
+
+        // 将NDC点反变换到世界空间
+        glm::vec4 worldPos = invVP * clip;
+        worldPos /= worldPos.w;
+
+        glm::vec3 rayOrigin = camera.Position;
+        glm::vec3 rayDir = glm::normalize(glm::vec3(worldPos) - rayOrigin);
+
+        // 判断是否打到台灯
+        if (rayHitLamp(rayOrigin, rayDir))
+        {
+            lampOn = !lampOn;
+            std::cout << "台灯状态: " << (lampOn ? "打开" : "关闭") << std::endl;
+        }
+    }
+}
+
+bool rayHitLamp(const glm::vec3& rayOrigin, const glm::vec3& rayDir)
+{
+    // 使用一个球体包围台灯，判断射线是否与球体相交
+    glm::vec3 center = lampModelWorldPos;
+    float radius = 0.6f;
+
+    // 射线-球求交 
+    glm::vec3 oc = rayOrigin - center;
+
+    // 求解 t^2 + 2*(oc·D)*t + (oc·oc - r^2) = 0 的判别式
+    float b = glm::dot(oc, rayDir); // 等价于 0.5 * 2*(oc·D)
+    float c = glm::dot(oc, oc) - radius * radius;
+    float discriminant = b * b - c;
+
+    // 无解则不相交
+    if (discriminant < 0.0f) return false;
+
+    // 确保在摄像机前方
+    float t1 = -b - glm::sqrt(discriminant);
+    float t2 = -b + glm::sqrt(discriminant);
+    if (t1 < 0.0f && t2 < 0.0f) return false;
+    
+    return true;
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called

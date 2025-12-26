@@ -42,7 +42,7 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
     std::vector<glm::vec2> uvs;
     std::vector<glm::vec3> normals;
 
-    // 1. 生成顶点位置和UV
+    // 生成顶点位置和UV
     for (int i = 0; i <= resolution; i++) {
         for (int j = 0; j <= resolution; j++) {
             float x = (float)j / (float)resolution * width - width / 2.0f;
@@ -52,7 +52,7 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         }
     }
 
-    // 2. 根据方法设置高度 (Y坐标)
+    // 根据方法设置高度 (Y坐标)
     if (method == GenMethod::HEIGHTMAP && heightmapPath != nullptr) {
         int imgWidth, imgHeight, nrChannels;
         unsigned char* data = stbi_load(heightmapPath, &imgWidth, &imgHeight, &nrChannels, 0);
@@ -75,7 +75,7 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         }
     }
 
-    // 3. 生成索引
+    // 生成索引
     indices.clear();
     for (int i = 0; i < resolution; i++) {
         for (int j = 0; j < resolution; j++) {
@@ -90,7 +90,7 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         }
     }
 
-    // 4. 计算法线
+    // 计算法线
     normals.assign(positions.size(), glm::vec3(0.0f));
     for (size_t i = 0; i < indices.size(); i += 3) {
         glm::vec3 p1 = positions[indices[i]];
@@ -105,7 +105,7 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         n = glm::normalize(n);
     }
 
-    // 计算切线和副切线 ---
+    // 计算切线和副切线
     std::vector<glm::vec3> tangents(positions.size(), glm::vec3(0.0f));
     std::vector<glm::vec3> bitangents(positions.size(), glm::vec3(0.0f));
     for (size_t i = 0; i < indices.size(); i += 3) {
@@ -141,7 +141,7 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         bitangents[indices[i+2]] += bitangent;
     }
 
-    // 5. 填充 Vertex 结构体 (for top surface)
+    // 填充 Vertex 结构体 (for top surface)
     vertices.clear();
     vertices.resize(positions.size());
     for (size_t i = 0; i < positions.size(); ++i) {
@@ -153,12 +153,12 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         vertices[i].isTopSurface = 1.0f;
     }
 
-    // 6. 生成底座和侧壁
+    // 生成底座和侧壁
     float halfW = width / 2.0f;
     float halfD = depth / 2.0f;
     
     unsigned int baseVertexOffset = vertices.size();
-    // --- 关键修复：为所有成员提供初始值 ---
+    // 为所有成员提供初始值
     glm::vec3 zeroVec(0.0f);
     vertices.push_back({{ halfW, -baseHeight,  halfD}, {0, -1, 0}, {1, 1}, zeroVec, zeroVec, 0.0f});
     vertices.push_back({{-halfW, -baseHeight,  halfD}, {0, -1, 0}, {0, 1}, zeroVec, zeroVec, 0.0f});
@@ -197,7 +197,7 @@ void TerrainSandbox::generateMesh(float width, float depth, int resolution, GenM
         indices.push_back(currentOffset + 3);
     };
 
-    // 使用正确的索引逻辑生成四个侧壁 ---
+    // 使用正确的索引逻辑生成四个侧壁
     int res = resolution;
     for (int i = 0; i < res; ++i) {
         // 后侧壁 (z 最小)
@@ -226,7 +226,7 @@ void TerrainSandbox::setupMesh(Shader& shader) {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, indices.size() * sizeof(unsigned int), &indices[0], GL_STATIC_DRAW);
 
-    // 使用glGetAttribLocation查询属性位置，而非硬编码
+    // 使用glGetAttribLocation查询属性位置
     GLint posAttrib = glGetAttribLocation(shader.ID, "aPos");
     GLint normalAttrib = glGetAttribLocation(shader.ID, "aNormal");
     GLint texAttrib = glGetAttribLocation(shader.ID, "aTexCoords");
@@ -373,7 +373,7 @@ float TerrainSandbox::getHeight(float worldX, float worldZ) {
     glm::vec3 p3 = terrainPositions[((gridZ + 1) * (res + 1)) + gridX];
     glm::vec3 p4 = terrainPositions[((gridZ + 1) * (res + 1)) + gridX + 1];
 
-    // --- 关键修复：使用正确的坐标进行重心插值 ---
+    // 进行重心插值
     // 我们需要将单元格内的坐标 (xCoord, zCoord) 转换为与 p1,p2,p3 相同的局部模型坐标系
     float interpolatedX = p1.x + (p2.x - p1.x) * xCoord;
     float interpolatedZ = p1.z + (p3.z - p1.z) * zCoord;
@@ -431,7 +431,7 @@ void TerrainSandbox::addGrowth(float worldX, float worldZ) {
     // 如果在范围外则忽略
     if (u < 0 || u > 1 || v < 0 || v > 1) return;
 
-    // --- 开始绘制到 growthTexture ---
+    // 开始绘制到 growthTexture
     glViewport(0, 0, growthTextureSize, growthTextureSize);
     glBindFramebuffer(GL_FRAMEBUFFER, growthFBO);
     
@@ -477,7 +477,7 @@ void TerrainSandbox::addSnow(float worldX, float worldZ) {
     paintShader.setFloat("radius", 0.3f); 
     paintShader.setFloat("scale", (float)growthTextureSize);
     // 绘制到绿色通道
-    paintShader.setVec3("paintColor", glm::vec3(0.0f, 1.0f, 0.0f)); 
+    paintShader.setVec3("paintColor", glm::vec3(0.0f, 0.5f, 0.0f)); 
 
     glBindVertexArray(paintQuadVAO);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);

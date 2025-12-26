@@ -15,10 +15,9 @@ void main()
 
     vec3 center_world = vec3(model[3]);
 
-    // --- 关键修复：正确地从 vec2 构建 vec3 ---
-    // 1. 先在 xz 平面计算一个 2D 的方向向量
+    // 先在 xz 平面计算一个 2D 的方向向量
     vec2 look_xz = normalize(cameraPos.xz - center_world.xz);
-    // 2. 然后用这个 2D 向量构建一个 3D 向量，并将 y 分量设为 0
+    // 然后用这个 2D 向量构建一个 3D 向量，并将 y 分量设为 0
     vec3 look = vec3(look_xz.x, 0.0, look_xz.y);
 
     // 计算右向量
