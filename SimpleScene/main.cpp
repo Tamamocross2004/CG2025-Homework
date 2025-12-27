@@ -27,6 +27,26 @@ bool lampOn = false; // 台灯是否打开
 glm::vec3 lampModelWorldPos(0.0f); // 台灯在世界坐标系中的位置
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods); // 鼠标点击回调函数
 bool rayHitLamp(const glm::vec3& rayOrigin, const glm::vec3& rayDir); // 射线检测函数，判断是否击中台灯
+bool isNearHorse(const glm::vec3& playerPos, const glm::vec3& horsePos, float threshold); // 检查玩家是否靠近马雕像
+glm::vec3 clampToRoomBounds(const glm::vec3& position); // 限制位置在房间范围内
+
+// 马雕像控制状态
+bool isControllingHorse = false; // 是否正在控制马雕像
+bool eKeyPressed = false; // E键状态
+glm::vec3 horse1Position(0.0f); // 第一个马雕像的位置
+glm::vec3 horse2Position(0.0f); // 第二个马雕像的位置
+float horse1RotationY = 0.0f; // 第一个马雕像的Y轴旋转
+float horse1RotationX = 0.0f; // 第一个马雕像的X轴旋转
+float horse2RotationY = 0.0f; // 第二个马雕像的Y轴旋转
+float horse2RotationX = 0.0f; // 第二个马雕像的X轴旋转
+int controlledHorseIndex = 0; // 当前控制的马雕像索引（0或1）
+const float INTERACTION_DISTANCE = 3.0f; // 交互距离阈值
+glm::vec3 savedCameraPosition(0.0f); // 保存进入控制模式前的相机位置
+float savedCameraYaw = 0.0f; // 保存进入控制模式前的相机Yaw
+float savedCameraPitch = 0.0f; // 保存进入控制模式前的相机Pitch
+glm::vec3 initialCameraPosition(0.0f, 0.0f, 11.0f); // 程序启动时的初始相机位置
+float initialCameraYaw = -90.0f; // 程序启动时的初始相机Yaw
+float initialCameraPitch = 0.0f; // 程序启动时的初始相机Pitch
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -137,10 +157,59 @@ int main()
     } catch (...) {
         std::cout << "ERROR: Failed to load bloom shaders!" << std::endl;
     }
+    // 文字显示着色器（屏幕空间，已弃用）
+    Shader* textDisplayShader = nullptr;
+    try {
+        textDisplayShader = new Shader("text_display.vs", "text_display.fs");
+    } catch (...) {
+        std::cout << "ERROR: Failed to load text display shader!" << std::endl;
+    }
+    // Billboard着色器（世界空间）
+    Shader* billboardShader = nullptr;
+    try {
+        billboardShader = new Shader("billboard.vs", "billboard.fs");
+    } catch (...) {
+        std::cout << "ERROR: Failed to load billboard shader!" << std::endl;
+    }
+    // 灵珠着色器
+    Shader* orbShader = nullptr;
+    try {
+        orbShader = new Shader("orb.vs", "orb.fs");
+    } catch (...) {
+        std::cout << "ERROR: Failed to load orb shader!" << std::endl;
+    }
 
     // --- 加载模型 ---
     Model ourModel("resource/model/table3.obj");
     Model lampModel("resource/lamp/lamp1.obj");
+    // 加载马雕像模型（尝试多种可能的文件格式）
+    Model* horseModel = nullptr;
+    std::vector<std::string> possiblePaths = {
+        "resource/horse_statue_01_4k.blend/horse_statue_01_4k.obj",
+        "resource/horse_statue_01_4k.blend/horse_statue_01_4k.fbx",
+        "resource/horse_statue_01_4k.blend/horse_statue_01_4k.blend"
+    };
+    for (const auto& path : possiblePaths) {
+        try {
+            horseModel = new Model(path);
+            // 检查模型是否成功加载（通过检查是否有网格）
+            if (horseModel && horseModel->meshes.size() > 0) {
+                std::cout << "Loaded horse statue model successfully from: " << path << std::endl;
+                break;
+            } else {
+                delete horseModel;
+                horseModel = nullptr;
+            }
+        } catch (...) {
+            if (horseModel) {
+                delete horseModel;
+                horseModel = nullptr;
+            }
+        }
+    }
+    if (!horseModel) {
+        std::cout << "Warning: Failed to load horse statue model. Please export the .blend file as .obj or .fbx format and place it in the resource/horse_statue_01_4k.blend/ folder." << std::endl;
+    }
 
     // --- 创建沙盘实例 ---
     // 方法1：从高度图创建
@@ -304,17 +373,59 @@ int main()
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
 
-    // --- 创建带纹理坐标的地板顶点数据 ---
+    // --- 创建带纹理坐标的地板顶点数据（有厚度） ---
     // 地板顶点：位置(3) + 法线(3) + 纹理坐标(2) = 8个float
     // 纹理坐标设为2.0，实现2x2重复，每个砖块更大
+    // 地板厚度为0.15，从y=-0.5到y=-0.35（相对于地板中心）
+    // 底部在y=-2.95，顶部在y=-2.80（通过translate和scale计算得出）
     float floorVertices[] = {
-        // positions          // normals         // texCoords
+        // 顶部面（向上）
+        -0.5f, -0.35f, -0.5f,  0.0f,  1.0f, 0.0f,  0.0f, 0.0f,
+         0.5f, -0.35f, -0.5f,  0.0f,  1.0f, 0.0f,  2.0f, 0.0f,
+         0.5f, -0.35f,  0.5f,  0.0f,  1.0f, 0.0f,  2.0f, 2.0f,
+         0.5f, -0.35f,  0.5f,  0.0f,  1.0f, 0.0f,  2.0f, 2.0f,
+        -0.5f, -0.35f,  0.5f,  0.0f,  1.0f, 0.0f,  0.0f, 2.0f,
+        -0.5f, -0.35f, -0.5f,  0.0f,  1.0f, 0.0f,  0.0f, 0.0f,
+        
+        // 底部面（向下）
         -0.5f, -0.5f, -0.5f,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
          0.5f, -0.5f, -0.5f,  0.0f, -1.0f, 0.0f,  2.0f, 0.0f,
          0.5f, -0.5f,  0.5f,  0.0f, -1.0f, 0.0f,  2.0f, 2.0f,
          0.5f, -0.5f,  0.5f,  0.0f, -1.0f, 0.0f,  2.0f, 2.0f,
         -0.5f, -0.5f,  0.5f,  0.0f, -1.0f, 0.0f,  0.0f, 2.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f
+        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+        
+        // 前面（+Z方向）
+        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  2.0f, 0.0f,
+         0.5f, -0.35f,  0.5f,  0.0f,  0.0f,  1.0f,  2.0f, 0.15f,
+         0.5f, -0.35f,  0.5f,  0.0f,  0.0f,  1.0f,  2.0f, 0.15f,
+        -0.5f, -0.35f,  0.5f,  0.0f,  0.0f,  1.0f,  0.0f, 0.15f,
+        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  0.0f, 0.0f,
+        
+        // 后面（-Z方向）
+        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  2.0f, 0.0f,
+         0.5f, -0.35f, -0.5f,  0.0f,  0.0f, -1.0f,  2.0f, 0.15f,
+         0.5f, -0.35f, -0.5f,  0.0f,  0.0f, -1.0f,  2.0f, 0.15f,
+        -0.5f, -0.35f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.15f,
+        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+        
+        // 右面（+X方向）
+         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  2.0f, 0.0f,
+         0.5f, -0.35f,  0.5f,  1.0f,  0.0f,  0.0f,  2.0f, 0.15f,
+         0.5f, -0.35f,  0.5f,  1.0f,  0.0f,  0.0f,  2.0f, 0.15f,
+         0.5f, -0.35f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 0.15f,
+         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+        
+        // 左面（-X方向）
+        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  2.0f, 0.0f,
+        -0.5f, -0.35f,  0.5f, -1.0f,  0.0f,  0.0f,  2.0f, 0.15f,
+        -0.5f, -0.35f,  0.5f, -1.0f,  0.0f,  0.0f,  2.0f, 0.15f,
+        -0.5f, -0.35f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 0.15f,
+        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f
     };
     
     unsigned int floorVAO, floorVBO;
@@ -332,6 +443,86 @@ int main()
     // 纹理坐标属性
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
     glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
+
+    // --- 生成球体几何体（用于灵珠） ---
+    std::vector<float> sphereVertices;
+    std::vector<unsigned int> sphereIndices;
+    unsigned int sphereVAO, sphereVBO, sphereEBO;
+    unsigned int sphereIndexCount = 0;
+    
+    // 球体参数
+    float sphereRadius = 0.3f;
+    int sphereSectors = 32;  // 经度分段数
+    int sphereStacks = 32;   // 纬度分段数
+    
+    // 生成球体顶点
+    for (int i = 0; i <= sphereStacks; ++i) {
+        float stackAngle = M_PI / 2.0f - i * M_PI / sphereStacks;
+        float xy = sphereRadius * cosf(stackAngle);
+        float z = sphereRadius * sinf(stackAngle);
+        
+        for (int j = 0; j <= sphereSectors; ++j) {
+            float sectorAngle = j * 2.0f * M_PI / sphereSectors;
+            
+            float x = xy * cosf(sectorAngle);
+            float y = xy * sinf(sectorAngle);
+            
+            // 位置
+            sphereVertices.push_back(x);
+            sphereVertices.push_back(y);
+            sphereVertices.push_back(z);
+            
+            // 法线（归一化）
+            float nx = x / sphereRadius;
+            float ny = y / sphereRadius;
+            float nz = z / sphereRadius;
+            sphereVertices.push_back(nx);
+            sphereVertices.push_back(ny);
+            sphereVertices.push_back(nz);
+        }
+    }
+    
+    // 生成球体索引
+    for (int i = 0; i < sphereStacks; ++i) {
+        int k1 = i * (sphereSectors + 1);
+        int k2 = k1 + sphereSectors + 1;
+        
+        for (int j = 0; j < sphereSectors; ++j, ++k1, ++k2) {
+            if (i != 0) {
+                sphereIndices.push_back(k1);
+                sphereIndices.push_back(k2);
+                sphereIndices.push_back(k1 + 1);
+            }
+            
+            if (i != (sphereStacks - 1)) {
+                sphereIndices.push_back(k1 + 1);
+                sphereIndices.push_back(k2);
+                sphereIndices.push_back(k2 + 1);
+            }
+        }
+    }
+    sphereIndexCount = sphereIndices.size();
+    
+    // 创建球体VAO
+    glGenVertexArrays(1, &sphereVAO);
+    glGenBuffers(1, &sphereVBO);
+    glGenBuffers(1, &sphereEBO);
+    
+    glBindVertexArray(sphereVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, sphereVBO);
+    glBufferData(GL_ARRAY_BUFFER, sphereVertices.size() * sizeof(float), &sphereVertices[0], GL_STATIC_DRAW);
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, sphereEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sphereIndices.size() * sizeof(unsigned int), &sphereIndices[0], GL_STATIC_DRAW);
+    
+    // 位置属性
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    // 法线属性
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    
     glBindVertexArray(0);
 
     // --- 创建全屏四边形（用于后处理） ---
@@ -354,6 +545,34 @@ int main()
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    glBindVertexArray(0);
+
+    // --- 创建"E"字的几何体（世界空间，使用billboard） ---
+    // 使用一个简单的quad，billboard着色器会处理E字的绘制
+    float eQuadVertices[] = {
+        // 位置（相对于中心的偏移，-0.5到0.5）
+        -0.5f, -0.5f, 0.0f,  // 左下
+         0.5f, -0.5f, 0.0f,  // 右下
+         0.5f,  0.5f, 0.0f,  // 右上
+        -0.5f,  0.5f, 0.0f   // 左上
+    };
+    
+    unsigned int eIndices[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+    
+    unsigned int eVAO, eVBO, eEBO;
+    glGenVertexArrays(1, &eVAO);
+    glGenBuffers(1, &eVBO);
+    glGenBuffers(1, &eEBO);
+    glBindVertexArray(eVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, eVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(eQuadVertices), eQuadVertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, eEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(eIndices), eIndices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
     glBindVertexArray(0);
 
     // 统一房间用的顶点信息(每一个前面三个值为顶点坐标，中间三个值为法线向量，最后两个值为纹理坐标)
@@ -631,13 +850,13 @@ int main()
 
             // 设置模型变换
             model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, -2.95f, 0.0f));
-            model = glm::scale(model, glm::vec3(8.0f, 0.1f, 8.0f));
+            model = glm::translate(model, glm::vec3(0.0f, -2.50f, 0.0f));
+            model = glm::scale(model, glm::vec3(8.0f, 1.0f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // 使用地板的VAO渲染
+            // 使用地板的VAO渲染（现在有36个顶点，6个面）
             glBindVertexArray(floorVAO);
-            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
             glBindVertexArray(0);
         }
 
@@ -835,6 +1054,95 @@ int main()
             // sandbox_procedural.Draw(sandboxShader);
         }
 
+        // --- 初始化马雕像位置（只在第一次运行时） ---
+        static bool horsesInitialized = false;
+        if (!horsesInitialized && horseModel) {
+            horse1Position = sceneOrigin + glm::vec3(-3.0f, -2.95f, -3.0f);
+            horse2Position = sceneOrigin + glm::vec3(3.0f, -2.95f, -3.0f);
+            horse1RotationY = 90.0f;
+            horse1RotationX = -90.0f;
+            horse2RotationY = -90.0f;
+            horse2RotationX = -90.0f;
+            horsesInitialized = true;
+        }
+
+        // --- 绘制马雕像模型（放在房间左后角） ---
+        if (horseModel) {
+            modelShader.use();
+            modelShader.setMat4("projection", projection);
+            modelShader.setMat4("view", view);
+
+            // 设置房顶灯
+            modelShader.setVec3("viewPos", camera.Position);
+            modelShader.setVec3("light.position", lightPos); 
+            modelShader.setVec3("light.ambient", finalLightColor * 0.2f);
+            modelShader.setVec3("light.diffuse", finalLightColor);
+            modelShader.setVec3("light.specular", finalLightColor * 0.2f);
+
+            // 设置台灯点光源
+            glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
+            glm::vec3 lampColor(1.0f, 0.9f, 0.7f);
+            modelShader.setBool("lampOn", lampOn);
+            modelShader.setVec3("lampLight.position", lampLightPos);
+            modelShader.setVec3("lampLight.color", lampColor);
+            modelShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
+            modelShader.setBool("isLampModel", false);
+
+            // 绘制第一个马雕像模型 - 使用动态位置和旋转
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, horse1Position);
+            model = glm::scale(model, glm::vec3(10.0f));
+            model = glm::rotate(model, glm::radians(horse1RotationY), glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(horse1RotationX), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)); // 保持Z轴旋转
+            modelShader.setMat4("model", model);
+            horseModel->Draw(modelShader);
+
+            // 绘制第二个马雕像模型 - 使用动态位置和旋转
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, horse2Position);
+            model = glm::scale(model, glm::vec3(10.0f));
+            model = glm::rotate(model, glm::radians(horse2RotationY), glm::vec3(0.0f, 1.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(horse2RotationX), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 0.0f, 1.0f)); // 保持Z轴旋转ww
+            modelShader.setMat4("model", model);
+            horseModel->Draw(modelShader);
+        }
+
+        // --- 绘制灵珠 ---
+        if (orbShader) {
+            orbShader->use();
+            orbShader->setMat4("projection", projection);
+            orbShader->setMat4("view", view);
+            
+            // 设置光源
+            orbShader->setVec3("viewPos", camera.Position);
+            orbShader->setVec3("lightPos", lightPos);
+            orbShader->setVec3("lightColor", finalLightColor);
+            
+            // 设置台灯点光源
+            glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
+            glm::vec3 lampColor(1.0f, 0.9f, 0.7f);
+            orbShader->setBool("lampOn", lampOn);
+            orbShader->setVec3("lampLight.position", lampLightPos);
+            orbShader->setVec3("lampLight.color", lampColor);
+            orbShader->setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
+            
+            // 设置时间（用于颜色变化）
+            orbShader->setFloat("time", currentFrame);
+            
+            // 设置模型变换（放在地板上，房间中心偏前）
+            // 地板顶部在y=-2.85，灵珠半径0.3，所以灵珠中心应该在y=-2.85+0.3=-2.55
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, sceneOrigin + glm::vec3(0.0f, -2.55f, 3.0f)); // 灵珠底部正好在地板顶部
+            orbShader->setMat4("model", model);
+            
+            // 渲染球体
+            glBindVertexArray(sphereVAO);
+            glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+        }
+
         // 绘制雨云 (如果可见) 
         // 沙盘的世界位置应该只在这里定义一次
         glm::vec3 sandboxWorldPos = sceneOrigin + glm::vec3(0.5f, -1.4f, -1.0f);
@@ -905,6 +1213,62 @@ int main()
                 snowSystem.Update(deltaTime, cloudWorldCenter, sandboxWorldPos, ParticleSystem::EffectType::SNOW);
                 snowSystem.Draw(view, projection, true); // true 表示以点的形式绘制
             }
+        }
+        
+        // --- 检测是否靠近马雕像并显示E键提示 ---
+        static bool lastShowEPrompt = false;
+        bool showEPrompt = false;
+        glm::vec3 eLetterPos(0.0f);
+        if (!isControllingHorse && horseModel) {
+            glm::vec3 playerPos = camera.Position;
+            bool nearHorse1 = isNearHorse(playerPos, horse1Position, INTERACTION_DISTANCE);
+            bool nearHorse2 = isNearHorse(playerPos, horse2Position, INTERACTION_DISTANCE);
+            showEPrompt = nearHorse1 || nearHorse2;
+            
+            // 确定E字位置（在模型前方，朝向相机方向）
+            glm::vec3 horsePos = nearHorse1 ? horse1Position : horse2Position;
+            glm::vec3 toCamera = glm::normalize(camera.Position - horsePos);
+            // 将E字放在模型前方，距离更远一些，避免被遮挡
+            eLetterPos = horsePos + toCamera * 1.2f + glm::vec3(0.0f, 1.0f, 0.0f);
+            
+            // 只在状态改变时输出提示（避免重复输出）
+            if (showEPrompt && !lastShowEPrompt) {
+                std::cout << "按 E 键进入控制模式" << std::endl;
+            } else if (!showEPrompt && lastShowEPrompt) {
+                std::cout << "离开交互范围" << std::endl;
+            }
+            lastShowEPrompt = showEPrompt;
+        } else {
+            lastShowEPrompt = false;
+        }
+        
+        // --- 渲染"E"字提示（世界空间，billboard，在HDR FBO中） ---
+        if (showEPrompt && billboardShader && horseModel) {
+            // 确保在HDR FBO中渲染
+            glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+            
+            // 启用混合以支持透明度
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            // 禁用深度测试，确保E字始终显示在最前面
+            glDisable(GL_DEPTH_TEST);
+            
+            billboardShader->use();
+            billboardShader->setMat4("projection", projection);
+            billboardShader->setMat4("view", view);
+            billboardShader->setVec3("textColor", glm::vec3(1.0f, 1.0f, 0.0f)); // 黄色
+            
+            // 设置billboard位置和大小（缩小一些）
+            billboardShader->setVec3("centerPos", eLetterPos);
+            billboardShader->setVec2("size", glm::vec2(0.2f, 0.3f)); 
+            
+            glBindVertexArray(eVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+            
+            // 恢复状态
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_BLEND);
         }
 
         // 提取超过亮度阈值的区域
@@ -1000,6 +1364,20 @@ int main()
     if (lightning) delete lightning;
     if (lightningShader) delete lightningShader;
 
+    // 清理马雕像模型
+    if (horseModel) delete horseModel;
+
+    // 清理文字显示资源
+    glDeleteVertexArrays(1, &eVAO);
+    glDeleteBuffers(1, &eVBO);
+    glDeleteBuffers(1, &eEBO);
+    if (textDisplayShader) delete textDisplayShader;
+    if (billboardShader) delete billboardShader;
+    if (orbShader) delete orbShader;
+    glDeleteVertexArrays(1, &sphereVAO);
+    glDeleteBuffers(1, &sphereVBO);
+    glDeleteBuffers(1, &sphereEBO);
+
     // glfw: terminate, clearing all previously allocated GLFW resources.
     // ------------------------------------------------------------------
     glfwTerminate();
@@ -1013,15 +1391,112 @@ void processInput(GLFWwindow* window)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    // 相机移动
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.ProcessKeyboard(FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.ProcessKeyboard(LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.ProcessKeyboard(RIGHT, deltaTime);
+    // E键处理：进入/退出控制模式
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS && !eKeyPressed) {
+        eKeyPressed = true;
+        if (isControllingHorse) {
+            // 退出控制模式：恢复相机状态
+            isControllingHorse = false;
+            camera.Position = savedCameraPosition;
+            camera.Yaw = savedCameraYaw;
+            camera.Pitch = savedCameraPitch;
+            camera.ProcessMouseMovement(0.0f, 0.0f); // 触发向量更新
+            std::cout << "退出控制模式" << std::endl;
+        } else {
+            // 检查是否靠近马雕像
+            glm::vec3 playerPos = camera.Position;
+            bool nearHorse1 = isNearHorse(playerPos, horse1Position, INTERACTION_DISTANCE);
+            bool nearHorse2 = isNearHorse(playerPos, horse2Position, INTERACTION_DISTANCE);
+            
+            if (nearHorse1) {
+                // 保存当前相机状态（用于退出时恢复）
+                savedCameraPosition = camera.Position;
+                savedCameraYaw = camera.Yaw;
+                savedCameraPitch = camera.Pitch;
+                
+                // 进入控制模式：将相机设置为程序启动时的初始视角
+                camera.Position = initialCameraPosition;
+                camera.Yaw = initialCameraYaw;
+                camera.Pitch = initialCameraPitch;
+                camera.ProcessMouseMovement(0.0f, 0.0f); // 触发向量更新
+                
+                isControllingHorse = true;
+                controlledHorseIndex = 0;
+                
+                std::cout << "进入控制模式 - 马雕像1" << std::endl;
+            } else if (nearHorse2) {
+                // 保存当前相机状态（用于退出时恢复）
+                savedCameraPosition = camera.Position;
+                savedCameraYaw = camera.Yaw;
+                savedCameraPitch = camera.Pitch;
+                
+                // 进入控制模式：将相机设置为程序启动时的初始视角
+                camera.Position = initialCameraPosition;
+                camera.Yaw = initialCameraYaw;
+                camera.Pitch = initialCameraPitch;
+                camera.ProcessMouseMovement(0.0f, 0.0f); // 触发向量更新
+                
+                isControllingHorse = true;
+                controlledHorseIndex = 1;
+                
+                std::cout << "进入控制模式 - 马雕像2" << std::endl;
+            }
+        }
+    }
+    if (glfwGetKey(window, GLFW_KEY_E) == GLFW_RELEASE) {
+        eKeyPressed = false;
+    }
+
+    // 相机/模型移动
+    if (isControllingHorse) {
+        // 控制模式下：只移动模型，相机保持固定
+        glm::vec3& horsePos = (controlledHorseIndex == 0) ? horse1Position : horse2Position;
+        float& horseRotY = (controlledHorseIndex == 0) ? horse1RotationY : horse2RotationY;
+        
+        // WASD控制模型移动（基于相机视角方向）
+        glm::vec3 moveDir(0.0f);
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            moveDir += camera.Front;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            moveDir -= camera.Front;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            moveDir -= camera.Right;
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            moveDir += camera.Right;
+        
+        // 归一化移动方向，并限制在水平平面内（Y=0）
+        if (glm::length(moveDir) > 0.0f) {
+            moveDir = glm::normalize(moveDir);
+            moveDir.y = 0.0f; // 限制在水平平面内
+            moveDir = glm::normalize(moveDir);
+            float moveSpeed = 2.5f * deltaTime;
+            
+            // 只移动模型（在水平平面内），相机位置不变
+            horsePos += moveDir * moveSpeed;
+            horsePos = clampToRoomBounds(horsePos);
+        }
+        
+        // Q和R键控制模型旋转（顺时针和逆时针）
+        float rotationSpeed = 90.0f * deltaTime; // 每秒90度
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+            // Q键：顺时针旋转（Y轴增加）
+            horseRotY += rotationSpeed;
+        }
+        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+            // R键：逆时针旋转（Y轴减少）
+            horseRotY -= rotationSpeed;
+        }
+    } else {
+        // 正常模式：只移动相机
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            camera.ProcessKeyboard(FORWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            camera.ProcessKeyboard(BACKWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            camera.ProcessKeyboard(LEFT, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            camera.ProcessKeyboard(RIGHT, deltaTime);
+    }
 
     // 雨云控制
     // 切换雨云可见性
@@ -1108,7 +1583,13 @@ void mouse_callback(GLFWwindow* window, double xposIn, double yposIn)
     lastX = xpos;
     lastY = ypos;
 
-    camera.ProcessMouseMovement(xoffset, yoffset);
+    if (isControllingHorse) {
+        // 控制模式下：禁用鼠标旋转，相机保持固定
+        // 不处理鼠标输入
+    } else {
+        // 正常模式：只旋转相机
+        camera.ProcessMouseMovement(xoffset, yoffset);
+    }
 }
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
@@ -1175,6 +1656,24 @@ bool rayHitLamp(const glm::vec3& rayOrigin, const glm::vec3& rayDir)
     if (t1 < 0.0f && t2 < 0.0f) return false;
     
     return true;
+}
+
+// 检查玩家是否靠近马雕像
+bool isNearHorse(const glm::vec3& playerPos, const glm::vec3& horsePos, float threshold)
+{
+    float distance = glm::length(playerPos - horsePos);
+    return distance < threshold;
+}
+
+// 限制位置在房间范围内
+glm::vec3 clampToRoomBounds(const glm::vec3& position)
+{
+    glm::vec3 clamped = position;
+    // 房间范围：x: -3.5 到 3.5, y: -2.95 到 2.5, z: -3.5 到 3.5
+    clamped.x = glm::clamp(clamped.x, -3.5f, 3.5f);
+    clamped.y = glm::clamp(clamped.y, -2.95f, 2.5f);
+    clamped.z = glm::clamp(clamped.z, -3.5f, 3.5f);
+    return clamped;
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
