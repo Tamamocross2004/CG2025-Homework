@@ -75,7 +75,7 @@ void main()
         // 台灯通常向上发光，所以法线向上的部分应该更亮
         float upFactor = max(dot(norm, vec3(0.0, 1.0, 0.0)), 0.0);
         float sideFactor = 1.0 - abs(dot(norm, vec3(0.0, 1.0, 0.0))); // 侧面因子
-        float normalFactor = upFactor * 0.7 + sideFactor * 0.3; // 顶部更亮，侧面稍暗
+        float normalFactor = upFactor * 0.6 + sideFactor * 0.4; // 顶部更亮，侧面稍暗
         
         // 2. 基于视角的菲涅尔效果：从侧面看时边缘更亮（使用已定义的 viewDir）
         float fresnel = 1.0 - max(dot(viewDir, norm), 0.0);
@@ -84,7 +84,7 @@ void main()
         // 3. 基于距离光源的距离：靠近光源中心的部分更亮
         vec3 toLight = normalize(lampLight.position - FragPos);
         float distToLight = length(lampLight.position - FragPos);
-        float distFactor = 1.0 - smoothstep(0.0, 0.5, distToLight); // 0.5米内最亮
+        float distFactor = 1.0 - smoothstep(0.0, 1.5, distToLight); // 0.5米内最亮
         
         // 4. 基于纹理亮度：较亮的区域（可能是灯罩材质）发光更强
         float brightness = dot(texColor, vec3(0.299, 0.587, 0.114));
@@ -95,11 +95,11 @@ void main()
         
         // 6. 使用暖黄色发光，并与原始纹理颜色混合（而不是纯白色）
         vec3 emissionColor = mix(texColor, lampLight.color, 0.7); // 70% 暖黄 + 30% 原色
-        emission = emissionColor * emissionIntensity * 3.0; // 整体强度，可调
+        emission = emissionColor * emissionIntensity * 4.0; // 整体强度，可调
         
         // 7. 添加一个柔和的边缘光效果
         float edgeGlow = smoothstep(0.3, 0.7, fresnel) * normalFactor;
-        emission += lampLight.color * edgeGlow * 0.5;
+        emission += lampLight.color * edgeGlow * 0.8;
         
         // 将自发光加到最终结果
         result += emission;

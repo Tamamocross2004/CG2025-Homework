@@ -47,8 +47,8 @@ void main()
         vec3 L = normalize(fs_in.TangentLampLightPos - fs_in.TangentFragPos);
         float d = length(fs_in.TangentLampLightPos - fs_in.TangentFragPos);
         
-        // 衰减
-        float att = 1.0 / (1.0 + 0.35 * d + 0.44 * d * d);
+        // 衰减（使用更宽松的衰减参数，扩大光照范围）
+        float att = 1.0 / (1.0 + 0.15 * d + 0.15 * d * d);
         
         float diffL = max(dot(norm, L), 0.0);
         vec3 diffuseL = lampLight.color * diffL;

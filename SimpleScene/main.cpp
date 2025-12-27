@@ -63,6 +63,14 @@ float lastFrame = 0.0f;
 // 灯光位置
 glm::vec3 lightPos(0.0f, 2.5f, 3.0f);
 
+// Bloom 相关变量
+unsigned int hdrFBO, pingpongFBO[2], colorBuffers[2], pingpongColorBuffers[2];
+unsigned int quadVAO, quadVBO;
+Shader* bloomThresholdShader = nullptr;
+Shader* bloomBlurShader = nullptr;
+Shader* bloomFinalShader = nullptr;
+int bloomAmount = 10;  // 模糊迭代次数
+
 int main()
 {
     // 初始化并配置glfw
@@ -121,6 +129,14 @@ int main()
     } catch (...) {
         std::cout << "ERROR: Failed to load lightning shader!" << std::endl;
     }
+    // Bloom 着色器
+    try {
+        bloomThresholdShader = new Shader("bloom_blur.vs", "bloom_threshold.fs");
+        bloomBlurShader = new Shader("bloom_blur.vs", "bloom_blur.fs");
+        bloomFinalShader = new Shader("bloom_blur.vs", "bloom_final.fs");
+    } catch (...) {
+        std::cout << "ERROR: Failed to load bloom shaders!" << std::endl;
+    }
 
     // --- 加载模型 ---
     Model ourModel("resource/model/table3.obj");
@@ -152,6 +168,66 @@ int main()
     // --- 初始化粒子系统 ---
     ParticleSystem rainSystem(2000, &sandbox_heightmap);
     ParticleSystem snowSystem(3000, &sandbox_heightmap, "snow.vs", "snow.fs");
+
+    // --- 加载地砖纹理 ---
+    unsigned int floorTexture;
+    glGenTextures(1, &floorTexture);
+    glBindTexture(GL_TEXTURE_2D, floorTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int floorWidth, floorHeight, floorNrChannels;
+    unsigned char *floorData = stbi_load("resource/plank_flooring_04_4k.blend/textures/plank_flooring_04_diff_4k.jpg", &floorWidth, &floorHeight, &floorNrChannels, 0);
+    if (floorData)
+    {
+        GLenum format = GL_RGB;
+        if (floorNrChannels == 1)
+            format = GL_RED;
+        else if (floorNrChannels == 3)
+            format = GL_RGB;
+        else if (floorNrChannels == 4)
+            format = GL_RGBA;
+        
+        glTexImage2D(GL_TEXTURE_2D, 0, format, floorWidth, floorHeight, 0, format, GL_UNSIGNED_BYTE, floorData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        std::cout << "Loaded floor texture successfully" << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to load floor texture" << std::endl;
+    }
+    stbi_image_free(floorData);
+
+    // --- 加载木纹纹理（用于天花板和墙壁） ---
+    unsigned int woodTexture;
+    glGenTextures(1, &woodTexture);
+    glBindTexture(GL_TEXTURE_2D, woodTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int woodWidth, woodHeight, woodNrChannels;
+    unsigned char *woodData = stbi_load("resource/wood_cabinet_worn_long_4k.blend/textures/wood_cabinet_worn_long_diff_4k.jpg", &woodWidth, &woodHeight, &woodNrChannels, 0);
+    if (woodData)
+    {
+        GLenum format = GL_RGB;
+        if (woodNrChannels == 1)
+            format = GL_RED;
+        else if (woodNrChannels == 3)
+            format = GL_RGB;
+        else if (woodNrChannels == 4)
+            format = GL_RGBA;
+        
+        glTexImage2D(GL_TEXTURE_2D, 0, format, woodWidth, woodHeight, 0, format, GL_UNSIGNED_BYTE, woodData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        std::cout << "Loaded wood texture successfully" << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to load wood texture" << std::endl;
+    }
+    stbi_image_free(woodData);
 
     // --- 加载云纹理 ---
     unsigned int cloudTexture;
@@ -210,6 +286,7 @@ int main()
         0, 1, 2,
         2, 3, 0
     };
+    
     unsigned int cloudVAO, cloudVBO, cloudEBO;
     glGenVertexArrays(1, &cloudVAO);
     glGenBuffers(1, &cloudVBO);
@@ -227,51 +304,103 @@ int main()
     glEnableVertexAttribArray(1);
     glBindVertexArray(0);
 
-    // 统一房间用的顶点信息(每一个前面三个值为顶点坐标，后面三个值为法线向量)
+    // --- 创建带纹理坐标的地板顶点数据 ---
+    // 地板顶点：位置(3) + 法线(3) + 纹理坐标(2) = 8个float
+    // 纹理坐标设为2.0，实现2x2重复，每个砖块更大
+    float floorVertices[] = {
+        // positions          // normals         // texCoords
+        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  0.0f, -1.0f, 0.0f,  2.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, -1.0f, 0.0f,  2.0f, 2.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, -1.0f, 0.0f,  2.0f, 2.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, -1.0f, 0.0f,  0.0f, 2.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f
+    };
+    
+    unsigned int floorVAO, floorVBO;
+    glGenVertexArrays(1, &floorVAO);
+    glGenBuffers(1, &floorVBO);
+    glBindVertexArray(floorVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, floorVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(floorVertices), floorVertices, GL_STATIC_DRAW);
+    // 位置属性
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    // 法线属性
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    // 纹理坐标属性
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
+
+    // --- 创建全屏四边形（用于后处理） ---
+    float quadVertices[] = {
+        // positions   // texCoords
+        -1.0f,  1.0f,  0.0f, 1.0f,
+        -1.0f, -1.0f,  0.0f, 0.0f,
+        1.0f, -1.0f,  1.0f, 0.0f,
+        -1.0f,  1.0f,  0.0f, 1.0f,
+        1.0f, -1.0f,  1.0f, 0.0f,
+        1.0f,  1.0f,  1.0f, 1.0f
+    };
+
+    glGenVertexArrays(1, &quadVAO);
+    glGenBuffers(1, &quadVBO);
+    glBindVertexArray(quadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, quadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), &quadVertices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+    glBindVertexArray(0);
+
+    // 统一房间用的顶点信息(每一个前面三个值为顶点坐标，中间三个值为法线向量，最后两个值为纹理坐标)
     // ------------------------------------------------------------------
     float vertices[] = {
-        // positions          // normals 
-        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-         0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
+        // positions          // normals           // texCoords
+        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+         0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
 
-        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  0.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  1.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  1.0f, 1.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,  0.0f, 0.0f,
 
-        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
+        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+        -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+        -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
 
-         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+         0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
 
-        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-         0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-        -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  0.0f, 1.0f,
+         0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  1.0f, 1.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  1.0f, 0.0f,
+         0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  1.0f, 0.0f,
+        -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,  0.0f, 0.0f,
+        -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,  0.0f, 1.0f,
 
-        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-        -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
+        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 1.0f,
+         0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  1.0f, 1.0f,
+         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  1.0f, 0.0f,
+         0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  1.0f, 0.0f,
+        -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 0.0f,
+        -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,  0.0f, 1.0f
     };
 
     // --- 创建圆形窗户的顶点数据 ---
@@ -284,7 +413,7 @@ int main()
 
     // --- 生成带洞的墙壁的顶点数据 ---
     std::vector<float> wallWithHoleVertices = generateWallWithHoleVertices(8.0f, 6.0f, windowOuterRadius * windowScale, 72);
-    int wallWithHoleVertexCount = wallWithHoleVertices.size() / 6;
+    int wallWithHoleVertexCount = wallWithHoleVertices.size() / 8;
 
     // 创建墙壁、地板、天花板的VAO/VBO
     // ------------------------------------------------------------------
@@ -295,11 +424,14 @@ int main()
     glBindBuffer(GL_ARRAY_BUFFER, roomVBO);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
     // 位置属性
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     // 法线属性
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
+    // 纹理坐标属性
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
 
     // 创建窗户VAO/VBO
     // ------------------------------------------------------------------
@@ -323,7 +455,7 @@ int main()
     glBindVertexArray(lightCubeVAO);
     // 只绑定VBO, 因为它的数据和房间的顶点一样
     glBindBuffer(GL_ARRAY_BUFFER, roomVBO);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     
     // 创建后墙的VAO/VBO
@@ -334,10 +466,64 @@ int main()
     glBindVertexArray(wallVAO);
     glBindBuffer(GL_ARRAY_BUFFER, wallVBO);
     glBufferData(GL_ARRAY_BUFFER, wallWithHoleVertices.size() * sizeof(float), wallWithHoleVertices.data(), GL_STATIC_DRAW);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+
+    // --- 初始化 Bloom FBO ---
+    // 创建 HDR FBO（用于渲染场景）
+    glGenFramebuffers(1, &hdrFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+
+    // 创建两个颜色缓冲（多渲染目标）
+    glGenTextures(2, colorBuffers);
+    for (unsigned int i = 0; i < 2; i++)
+    {
+        glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorBuffers[i], 0);
+    }
+
+    // 创建深度缓冲
+    unsigned int rboDepth;
+    glGenRenderbuffers(1, &rboDepth);
+    glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+
+    // 告诉 OpenGL 使用多个颜色附件
+    unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+    glDrawBuffers(2, attachments);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cout << "ERROR::FRAMEBUFFER:: HDR FBO is not complete!" << std::endl;
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+    // 创建 Ping-Pong FBO（用于模糊）
+    glGenFramebuffers(2, pingpongFBO);
+    glGenTextures(2, pingpongColorBuffers);
+    for (unsigned int i = 0; i < 2; i++)
+    {
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
+        glBindTexture(GL_TEXTURE_2D, pingpongColorBuffers[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, NULL);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColorBuffers[i], 0);
+        
+        if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+            std::cout << "ERROR::FRAMEBUFFER:: PingPong FBO is not complete!" << std::endl;
+    }
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
     // 渲染循环
     // -----------
@@ -372,7 +558,7 @@ int main()
 
         // 整体光照强度
         glm::vec3 warmColor(1.0f, 0.85f, 0.6f);
-        float overallIntensity = 0.5f; // 整体亮度
+        float overallIntensity = 0.2f; // 整体亮度
         glm::vec3 finalLightColor = warmColor * overallIntensity;
 
         // --- 5. 如果打雷，增强光照 ---
@@ -393,7 +579,7 @@ int main()
         lightingShader.setBool("lampOn", lampOn);
         lightingShader.setVec3("lampLight.position", lampLightPos);
         lightingShader.setVec3("lampLight.color",    lampColor);
-        lightingShader.setFloat("lampLight.intensity", lampOn ? 2.0f : 0.0f);
+        lightingShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
 
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = camera.GetViewMatrix();
@@ -404,10 +590,21 @@ int main()
 
         glBindVertexArray(roomVAO);
 
+        // 渲染到 HDR FBO
+        glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
         // 绘制天花板
         {
-            //设置物体颜色
-            lightingShader.setVec3("objectColor", 0.5, 0.5f, 0.5f);
+            lightingShader.use();
+            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f); // 使用纹理时设为白色
+            lightingShader.setBool("useTexture", true);
+            lightingShader.setBool("isFloor", false); // 不是地板
+
+            // 绑定木纹纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, woodTexture);
+            lightingShader.setInt("floorTexture", 0);
 
             // 设置模型变换
             model = glm::mat4(1.0f);
@@ -416,30 +613,48 @@ int main()
             lightingShader.setMat4("model", model);
 
             // 渲染
+            glBindVertexArray(roomVAO);
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
         // 绘制地板
         {
-            //设置物体颜色
             lightingShader.use();
-            lightingShader.setVec3("objectColor", 0.4f, 0.3f, 0.25f);
+            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f); // 使用纹理时设为白色
+            lightingShader.setBool("useTexture", true);
+            lightingShader.setBool("isFloor", true); // 标识这是地板
+
+            // 绑定地砖纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, floorTexture);
+            lightingShader.setInt("floorTexture", 0);
 
             // 设置模型变换
             model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(0.0f, -3.0f, 0.0f));
+            model = glm::translate(model, glm::vec3(0.0f, -2.95f, 0.0f));
             model = glm::scale(model, glm::vec3(8.0f, 0.1f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // 渲染
-            glDrawArrays(GL_TRIANGLES, 0, 36);
+            // 使用地板的VAO渲染
+            glBindVertexArray(floorVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glBindVertexArray(0);
         }
 
         // 绘制左墙
         {
-            //设置物体颜色
             lightingShader.use();
-            lightingShader.setVec3("objectColor", 0.9f, 0.85f, 0.7f);
+            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f); // 使用纹理时设为白色
+            lightingShader.setBool("useTexture", true);
+            lightingShader.setBool("isFloor", false); // 不是地板
+
+            // 绑定木纹纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, woodTexture);
+            lightingShader.setInt("floorTexture", 0);
+
+            // 重新绑定roomVAO（因为地板使用了floorVAO）
+            glBindVertexArray(roomVAO);
 
             // 设置模型变换
             model = glm::mat4(1.0f);
@@ -453,9 +668,15 @@ int main()
 
         // 绘制右墙
         {
-            //设置物体颜色
             lightingShader.use();
-            lightingShader.setVec3("objectColor", 0.9f, 0.85f, 0.7f);
+            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f); // 使用纹理时设为白色
+            lightingShader.setBool("useTexture", true);
+            lightingShader.setBool("isFloor", false); // 不是地板
+
+            // 绑定木纹纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, woodTexture);
+            lightingShader.setInt("floorTexture", 0);
 
             // 设置模型变换
             model = glm::mat4(1.0f);
@@ -463,7 +684,7 @@ int main()
             model = glm::scale(model, glm::vec3(0.1f, 6.0f, 8.0f));
             lightingShader.setMat4("model", model);
 
-            // 渲染
+            // 渲染（roomVAO已经在左墙时绑定了）
             glDrawArrays(GL_TRIANGLES, 0, 36);
         }
 
@@ -484,9 +705,15 @@ int main()
         
         // 绘制带洞的后墙
         {
-            //设置物体颜色
             lightingShader.use();
-            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
+            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f); // 使用纹理时设为白色
+            lightingShader.setBool("useTexture", true);
+            lightingShader.setBool("isFloor", false); // 不是地板
+
+            // 绑定木纹纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, woodTexture);
+            lightingShader.setInt("floorTexture", 0);
 
             // 设置模型变换
             model = glm::mat4(1.0f);
@@ -503,6 +730,7 @@ int main()
         {
             //设置物体颜色
             lightingShader.use();
+            lightingShader.setBool("useTexture", false); // 窗户不使用纹理
             lightingShader.setVec3("objectColor", 0.36, 0.2f, 0.09f); // 木头颜色
 
             // 设置模型变换
@@ -514,19 +742,19 @@ int main()
             glDrawArrays(GL_TRIANGLES, 0, windowVertexCount); 
         }
 
-        // 绘制灯
-        {
-            lightCubeShader.use();
-            lightCubeShader.setMat4("projection", projection);
-            lightCubeShader.setMat4("view", view);
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, lightPos);
-            model = glm::scale(model, glm::vec3(0.2f)); // a smaller cube
-            lightCubeShader.setMat4("model", model);
+        // // 绘制房顶灯
+        // {
+        //     lightCubeShader.use();
+        //     lightCubeShader.setMat4("projection", projection);
+        //     lightCubeShader.setMat4("view", view);
+        //     model = glm::mat4(1.0f);
+        //     model = glm::translate(model, lightPos);
+        //     model = glm::scale(model, glm::vec3(0.2f)); // a smaller cube
+        //     lightCubeShader.setMat4("model", model);
 
-            glBindVertexArray(lightCubeVAO);
-            glDrawArrays(GL_TRIANGLES, 0, 36);
-        }
+        //     glBindVertexArray(lightCubeVAO);
+        //     glDrawArrays(GL_TRIANGLES, 0, 36);
+        // }
 
         // --- 绘制书桌模型 ---
         {
@@ -548,7 +776,7 @@ int main()
             modelShader.setBool("lampOn", lampOn);
             modelShader.setVec3("lampLight.position", lampLightPos);
             modelShader.setVec3("lampLight.color",    lampColor);
-            modelShader.setFloat("lampLight.intensity", lampOn ? 2.0f : 0.0f);
+            modelShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
             modelShader.setBool("isLampModel", false);
 
             // 渲染书桌模型
@@ -568,7 +796,7 @@ int main()
             modelShader.setBool("lampOn", lampOn);
             modelShader.setVec3("lampLight.position", lampLightPos);
             modelShader.setVec3("lampLight.color",    lampColor);
-            modelShader.setFloat("lampLight.intensity", lampOn ? 2.0f : 0.0f);
+            modelShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
             modelShader.setBool("isLampModel", true);
             // 为台灯设置一个新的 model 矩阵
             modelShader.use(); 
@@ -595,7 +823,7 @@ int main()
             sandboxShader.setVec3("lampLightPos", lampLightPos);
             sandboxShader.setBool("lampOn", lampOn);
             sandboxShader.setVec3("lampLight.color", lampColor);
-            sandboxShader.setFloat("lampLight.intensity", lampOn ? 2.0f : 0.0f);    
+            sandboxShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);    
 
             model = glm::mat4(1.0f);
             // 将沙盘放在书桌上
@@ -679,7 +907,57 @@ int main()
             }
         }
 
+        // 提取超过亮度阈值的区域
+        glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[0]);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+        bloomThresholdShader->use();
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, colorBuffers[0]);  // 使用第一个颜色缓冲（主场景）
+        bloomThresholdShader->setInt("sceneTexture", 0);
+        bloomThresholdShader->setFloat("threshold", 0.8f);  // 阈值
+
+        glBindVertexArray(quadVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(0);
+
+        // 高斯模糊（多次迭代）
+        bool horizontal = true, first_iteration = true;
+        bloomBlurShader->use();
+        for (unsigned int i = 0; i < bloomAmount; i++)
+        {
+            glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
+            bloomBlurShader->setBool("horizontal", horizontal);
+            bloomBlurShader->setFloat("blurSize", 1.0f);
+            
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, first_iteration ? pingpongColorBuffers[0] : pingpongColorBuffers[!horizontal]);
+            bloomBlurShader->setInt("image", 0);
+            
+            glBindVertexArray(quadVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glBindVertexArray(0);
+            
+            horizontal = !horizontal;
+            if (first_iteration)
+                first_iteration = false;
+        }
+        // 将 Bloom 效果混合到最终场景
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);  // 绑定到默认帧缓冲
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+        bloomFinalShader->use();
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, colorBuffers[0]);  // 原始场景
+        bloomFinalShader->setInt("sceneTexture", 0);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, pingpongColorBuffers[!horizontal]);  // 模糊后的Bloom纹理
+        bloomFinalShader->setInt("bloomTexture", 1);
+        bloomFinalShader->setFloat("bloomStrength", 0.8f);  // Bloom强度
+
+        glBindVertexArray(quadVAO);
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        glBindVertexArray(0);
 
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
@@ -693,12 +971,30 @@ int main()
     glDeleteVertexArrays(1, &lightCubeVAO);
     glDeleteVertexArrays(1, &windowVAO);
     glDeleteVertexArrays(1, &wallVAO);
-    glDeleteVertexArrays(1, &cloudVAO); 
+    glDeleteVertexArrays(1, &cloudVAO);
+    glDeleteVertexArrays(1, &floorVAO);
+    
     glDeleteBuffers(1, &roomVBO);
     glDeleteBuffers(1, &windowVBO);
     glDeleteBuffers(1, &wallVBO);
     glDeleteBuffers(1, &cloudVBO); 
     glDeleteBuffers(1, &cloudEBO);
+    glDeleteBuffers(1, &floorVBO);
+    
+    glDeleteTextures(1, &floorTexture);
+    glDeleteTextures(1, &woodTexture);
+
+    // 清理 Bloom 资源
+    glDeleteFramebuffers(1, &hdrFBO);
+    glDeleteFramebuffers(2, pingpongFBO);
+    glDeleteTextures(2, colorBuffers);
+    glDeleteTextures(2, pingpongColorBuffers);
+    glDeleteRenderbuffers(1, &rboDepth);
+    glDeleteVertexArrays(1, &quadVAO);
+    glDeleteBuffers(1, &quadVBO);
+    if (bloomThresholdShader) delete bloomThresholdShader;
+    if (bloomBlurShader) delete bloomBlurShader;
+    if (bloomFinalShader) delete bloomFinalShader;
 
     // 清理雷电资源 
     if (lightning) delete lightning;
@@ -1139,16 +1435,26 @@ std::vector<float> generateWallWithHoleVertices(float width, float height, float
         // 法线，因为是后墙，所以朝向Z轴正方向
         glm::vec3 normal(0.0f, 0.0f, 1.0f);
 
+        // 计算纹理坐标（基于世界坐标，归一化到0-1范围）
+        float texU1 = (inner1.x + halfW) / width;
+        float texV1 = (inner1.y + halfH) / height;
+        float texU2 = (outer1.x + halfW) / width;
+        float texV2 = (outer1.y + halfH) / height;
+        float texU3 = (outer2.x + halfW) / width;
+        float texV3 = (outer2.y + halfH) / height;
+        float texU4 = (inner2.x + halfW) / width;
+        float texV4 = (inner2.y + halfH) / height;
+
         // 用两个三角形构成一个四边形
         // 三角形 1
-        vertices.insert(vertices.end(), {inner1.x, inner1.y, inner1.z, normal.x, normal.y, normal.z});
-        vertices.insert(vertices.end(), {outer1.x, outer1.y, outer1.z, normal.x, normal.y, normal.z});
-        vertices.insert(vertices.end(), {outer2.x, outer2.y, outer2.z, normal.x, normal.y, normal.z});
+        vertices.insert(vertices.end(), {inner1.x, inner1.y, inner1.z, normal.x, normal.y, normal.z, texU1, texV1});
+        vertices.insert(vertices.end(), {outer1.x, outer1.y, outer1.z, normal.x, normal.y, normal.z, texU2, texV2});
+        vertices.insert(vertices.end(), {outer2.x, outer2.y, outer2.z, normal.x, normal.y, normal.z, texU3, texV3});
 
         // 三角形 2
-        vertices.insert(vertices.end(), {inner1.x, inner1.y, inner1.z, normal.x, normal.y, normal.z});
-        vertices.insert(vertices.end(), {outer2.x, outer2.y, outer2.z, normal.x, normal.y, normal.z});
-        vertices.insert(vertices.end(), {inner2.x, inner2.y, inner2.z, normal.x, normal.y, normal.z});
+        vertices.insert(vertices.end(), {inner1.x, inner1.y, inner1.z, normal.x, normal.y, normal.z, texU1, texV1});
+        vertices.insert(vertices.end(), {outer2.x, outer2.y, outer2.z, normal.x, normal.y, normal.z, texU3, texV3});
+        vertices.insert(vertices.end(), {inner2.x, inner2.y, inner2.z, normal.x, normal.y, normal.z, texU4, texV4});
     }
 
     return vertices;

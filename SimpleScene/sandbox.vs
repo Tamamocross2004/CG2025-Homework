@@ -33,9 +33,21 @@ void main()
     vs_out.isTopSurface = aIsTopSurface;
 
     mat3 normalMatrix = transpose(inverse(mat3(model)));
-    vec3 T = normalize(normalMatrix * aTangent);
-    vec3 B = normalize(normalMatrix * aBitangent);
     vec3 N = normalize(normalMatrix * aNormal);
+    
+    // 检查切线和副切线是否为零向量（侧壁的情况）
+    vec3 T, B;
+    if (length(aTangent) < 0.001) {
+        // 如果切线为零向量，使用法线计算一个默认的切线空间
+        // 选择与法线不平行的任意向量作为参考
+        vec3 ref = abs(N.z) < 0.999 ? vec3(0.0, 0.0, 1.0) : vec3(1.0, 0.0, 0.0);
+        T = normalize(cross(N, ref));
+        B = cross(N, T);
+    } else {
+        T = normalize(normalMatrix * aTangent);
+        B = normalize(normalMatrix * aBitangent);
+    }
+    
     mat3 TBN = transpose(mat3(T, B, N));
 
     vs_out.TangentLightPos = TBN * lightPos;
