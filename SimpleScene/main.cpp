@@ -29,6 +29,7 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 bool rayHitLamp(const glm::vec3& rayOrigin, const glm::vec3& rayDir); // 射线检测函数，判断是否击中台灯
 bool isNearHorse(const glm::vec3& playerPos, const glm::vec3& horsePos, float threshold); // 检查玩家是否靠近马雕像
 glm::vec3 clampToRoomBounds(const glm::vec3& position); // 限制位置在房间范围内
+bool areHorsesAtZAxisEnd(); // 检查两个马是否都在z轴尽头
 
 // 马雕像控制状态
 bool isControllingHorse = false; // 是否正在控制马雕像
@@ -90,6 +91,24 @@ Shader* bloomThresholdShader = nullptr;
 Shader* bloomBlurShader = nullptr;
 Shader* bloomFinalShader = nullptr;
 int bloomAmount = 10;  // 模糊迭代次数
+
+// 地板翘起相关变量
+bool isFloorTileLifting = false;      // 地板是否正在翘起
+float floorLiftProgress = 0.0f;       // 翘起进度 (0.0 到 1.0)
+float floorLiftSpeed = 0.5f;          // 翘起速度
+const float Z_AXIS_THRESHOLD = 3.0f; // z轴触发阈值（房间z范围是-3.5到3.5，-3.0接近尽头）
+unsigned int liftedTileVAO, liftedTileVBO; // 翘起地板块的VAO/VBO
+unsigned int liftedTileHoleVAO, liftedTileHoleVBO; // 无盖长方体（洞）的VAO/VBO
+
+// 灵珠拾取相关变量
+bool orbPicked = false;               // 灵珠是否已被拾取
+bool showOrbPickupMessage = false;    // 是否显示拾取消息
+float orbPickupMessageTime = 0.0f;    // 拾取消息显示时间
+const float ORB_PICKUP_MESSAGE_DURATION = 3.0f; // 拾取消息显示持续时间（秒）
+// 灵珠位置（全局变量，用于processInput访问）
+float g_tileWorldCenterX = 0.0f;
+float g_holeCenterY = 0.0f;
+float g_tileWorldCenterZ = 0.0f;
 
 int main()
 {
@@ -445,6 +464,178 @@ int main()
     glEnableVertexAttribArray(2);
     glBindVertexArray(0);
 
+    // --- 创建翘起地板块的几何体（房间偏右位置的一小块） ---
+    // 这块地板位于世界坐标：x: 1.5 到 3.0, z: -1.5 到 0.5
+    // 为了便于变换，将顶点定义为中心在(0,0,0)的局部坐标系
+    // 尺寸：宽度=1.5（x方向），深度=2.0（z方向），高度=0.15（y方向）
+    // 所以局部坐标范围：x: [-0.75, 0.75], z: [-1.0, 1.0], y: [-0.075, 0.075]
+    float tileHalfWidth = 0.75f;   // 1.5/2
+    float tileHalfDepth = 1.0f;    // 2.0/2
+    float tileHalfHeight = 0.075f; // 0.15/2
+    
+    // 世界坐标中心位置（原始投影位置）
+    float tileProjectionCenterX = 2.25f;  // (1.5 + 3.0) / 2 - 原始投影位置的中心X
+    float tileProjectionCenterZ = -0.5f;  // (-1.5 + 0.5) / 2 - 原始投影位置的中心Z
+    
+    // 翘起地板块向右平移后的位置（同时也是排除区域的中心）
+    float tileWorldCenterX = tileProjectionCenterX + 0.5f;  // 向右平移0.5个单位 = 2.75
+    float tileWorldCenterZ = tileProjectionCenterZ;  // Z坐标不变 = -0.5
+    // 排除区域的中心坐标（用于翘起地板块、无盖长方体和灵珠的位置）
+    // 排除区域：X: 2.0 到 3.5, Z: -1.5 到 0.5
+    // 中心：(2.75, -0.5) - 与翘起地板块位置一致
+    float excludedRegionCenterX = (2.0f + 3.5f) * 0.5f;  // 2.75（与tileWorldCenterX一致）
+    float excludedRegionCenterZ = (-1.5f + 0.5f) * 0.5f; // -0.5（与tileWorldCenterZ一致）
+    // 保存到全局变量，供翘起地板块、无盖长方体、灵珠和processInput使用（确保位置一致）
+    g_tileWorldCenterX = excludedRegionCenterX;  // 2.75
+    g_tileWorldCenterZ = excludedRegionCenterZ;  // -0.5
+    // 主地板：translate(0, -2.50, 0) + scale(8.0, 1.0, 8.0)
+    // 主地板局部坐标：y从-0.5到-0.35（相对于地板中心）
+    // 主地板顶部世界坐标：-2.50 + (-0.35) × 1.0 = -2.85
+    // 翘起地板块的顶部应该与主地板顶部对齐，所以地板块中心Y = -2.85 - 0.075 = -2.925
+    float tileWorldCenterY = -2.925f; // 地板块中心Y坐标（使顶部与主地板顶部-2.85对齐）
+    
+    // 定义顶点（中心在原点，范围：x:[-0.75,0.75], z:[-1.0,1.0], y:[-0.075,0.075]）
+    // 纹理坐标缩小范围以让纹理显示得更大（0.0到0.5，纹理会显示为原来的2倍大小）
+    float textureScale = 0.5f; // 纹理缩放因子，值越小纹理越大
+    float liftedTileVertices[] = {
+        // 顶部面（向上）
+        -tileHalfWidth, tileHalfHeight, -tileHalfDepth,  0.0f,  1.0f, 0.0f,  0.0f, 0.0f,
+         tileHalfWidth, tileHalfHeight, -tileHalfDepth,  0.0f,  1.0f, 0.0f,  textureScale, 0.0f,
+         tileHalfWidth, tileHalfHeight,  tileHalfDepth,  0.0f,  1.0f, 0.0f,  textureScale, textureScale,
+         tileHalfWidth, tileHalfHeight,  tileHalfDepth,  0.0f,  1.0f, 0.0f,  textureScale, textureScale,
+        -tileHalfWidth, tileHalfHeight,  tileHalfDepth,  0.0f,  1.0f, 0.0f,  0.0f, textureScale,
+        -tileHalfWidth, tileHalfHeight, -tileHalfDepth,  0.0f,  1.0f, 0.0f,  0.0f, 0.0f,
+        
+        // 底部面（向下）
+        -tileHalfWidth, -tileHalfHeight, -tileHalfDepth,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+         tileHalfWidth, -tileHalfHeight, -tileHalfDepth,  0.0f, -1.0f, 0.0f,  textureScale, 0.0f,
+         tileHalfWidth, -tileHalfHeight,  tileHalfDepth,  0.0f, -1.0f, 0.0f,  textureScale, textureScale,
+         tileHalfWidth, -tileHalfHeight,  tileHalfDepth,  0.0f, -1.0f, 0.0f,  textureScale, textureScale,
+        -tileHalfWidth, -tileHalfHeight,  tileHalfDepth,  0.0f, -1.0f, 0.0f,  0.0f, textureScale,
+        -tileHalfWidth, -tileHalfHeight, -tileHalfDepth,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+        
+        // 前面（+Z方向）
+        -tileHalfWidth, -tileHalfHeight, tileHalfDepth,  0.0f,  0.0f,  1.0f,  0.0f, 0.0f,
+         tileHalfWidth, -tileHalfHeight, tileHalfDepth,  0.0f,  0.0f,  1.0f,  1.0f, 0.0f,
+         tileHalfWidth,  tileHalfHeight, tileHalfDepth,  0.0f,  0.0f,  1.0f,  1.0f, 1.0f,
+         tileHalfWidth,  tileHalfHeight, tileHalfDepth,  0.0f,  0.0f,  1.0f,  1.0f, 1.0f,
+        -tileHalfWidth,  tileHalfHeight, tileHalfDepth,  0.0f,  0.0f,  1.0f,  0.0f, 1.0f,
+        -tileHalfWidth, -tileHalfHeight, tileHalfDepth,  0.0f,  0.0f,  1.0f,  0.0f, 0.0f,
+        
+        // 后面（-Z方向）- 这是旋转轴所在的面
+        -tileHalfWidth, -tileHalfHeight, -tileHalfDepth,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+         tileHalfWidth, -tileHalfHeight, -tileHalfDepth,  0.0f,  0.0f, -1.0f,  1.0f, 0.0f,
+         tileHalfWidth,  tileHalfHeight, -tileHalfDepth,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+         tileHalfWidth,  tileHalfHeight, -tileHalfDepth,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+        -tileHalfWidth,  tileHalfHeight, -tileHalfDepth,  0.0f,  0.0f, -1.0f,  0.0f, 1.0f,
+        -tileHalfWidth, -tileHalfHeight, -tileHalfDepth,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+        
+        // 右面（+X方向）
+         tileHalfWidth, -tileHalfHeight, -tileHalfDepth,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+         tileHalfWidth, -tileHalfHeight,  tileHalfDepth,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+         tileHalfWidth,  tileHalfHeight,  tileHalfDepth,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+         tileHalfWidth,  tileHalfHeight,  tileHalfDepth,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+         tileHalfWidth,  tileHalfHeight, -tileHalfDepth,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+         tileHalfWidth, -tileHalfHeight, -tileHalfDepth,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+        
+        // 左面（-X方向）
+        -tileHalfWidth, -tileHalfHeight, -tileHalfDepth, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+        -tileHalfWidth, -tileHalfHeight,  tileHalfDepth, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+        -tileHalfWidth,  tileHalfHeight,  tileHalfDepth, -1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+        -tileHalfWidth,  tileHalfHeight,  tileHalfDepth, -1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+        -tileHalfWidth,  tileHalfHeight, -tileHalfDepth, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+        -tileHalfWidth, -tileHalfHeight, -tileHalfDepth, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f
+    };
+    
+    glGenVertexArrays(1, &liftedTileVAO);
+    glGenBuffers(1, &liftedTileVBO);
+    glBindVertexArray(liftedTileVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, liftedTileVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(liftedTileVertices), liftedTileVertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
+
+    // --- 创建无盖长方体（洞）的几何体 ---
+    // 位于排除区域的正下方，向下延伸到地板下方
+    // 尺寸：宽度1.5，深度2.0，高度0.65
+    // 顶部Y: -2.85（地板顶部），底部Y: -3.5（地板下方，更深）
+    // 无盖长方体：5个面（底部、前面、后面、左面、右面，没有顶部）
+    float holeWidth = 1.5f;   // X方向宽度
+    float holeDepth = 2.0f;   // Z方向深度
+    float holeTopY = -2.85f;  // 顶部Y坐标（地板顶部）
+    float holeBottomY = -3.5f; // 底部Y坐标（更深，延伸到地板下方）
+    float holeHeight = holeTopY - holeBottomY; // 高度 = 0.65
+    
+    float holeCenterY = (holeTopY + holeBottomY) * 0.5f; // 洞的中心Y（X和Z在渲染时通过tileWorldCenterX/Z设置）
+    // 保存到全局变量，供processInput使用
+    g_holeCenterY = holeCenterY;
+    
+    // 局部坐标范围（中心在原点）
+    float holeHalfWidth = holeWidth * 0.5f;  // 0.75
+    float holeHalfDepth = holeDepth * 0.5f;  // 1.0
+    float holeHalfHeight = holeHeight * 0.5f; // 0.075
+    
+    // 无盖长方体的顶点（5个面，30个顶点）
+    float liftedTileHoleVertices[] = {
+        // 底部面（向下，Y=holeBottomY）
+        -holeHalfWidth, -holeHalfHeight, -holeHalfDepth,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+         holeHalfWidth, -holeHalfHeight, -holeHalfDepth,  0.0f, -1.0f, 0.0f,  1.0f, 0.0f,
+         holeHalfWidth, -holeHalfHeight,  holeHalfDepth,  0.0f, -1.0f, 0.0f,  1.0f, 1.0f,
+         holeHalfWidth, -holeHalfHeight,  holeHalfDepth,  0.0f, -1.0f, 0.0f,  1.0f, 1.0f,
+        -holeHalfWidth, -holeHalfHeight,  holeHalfDepth,  0.0f, -1.0f, 0.0f,  0.0f, 1.0f,
+        -holeHalfWidth, -holeHalfHeight, -holeHalfDepth,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+        
+        // 前面（+Z方向，朝向房间前面）
+        -holeHalfWidth, -holeHalfHeight, holeHalfDepth,  0.0f,  0.0f,  1.0f,  0.0f, 0.0f,
+         holeHalfWidth, -holeHalfHeight, holeHalfDepth,  0.0f,  0.0f,  1.0f,  1.0f, 0.0f,
+         holeHalfWidth,  holeHalfHeight, holeHalfDepth,  0.0f,  0.0f,  1.0f,  1.0f, 1.0f,
+         holeHalfWidth,  holeHalfHeight, holeHalfDepth,  0.0f,  0.0f,  1.0f,  1.0f, 1.0f,
+        -holeHalfWidth,  holeHalfHeight, holeHalfDepth,  0.0f,  0.0f,  1.0f,  0.0f, 1.0f,
+        -holeHalfWidth, -holeHalfHeight, holeHalfDepth,  0.0f,  0.0f,  1.0f,  0.0f, 0.0f,
+        
+        // 后面（-Z方向，朝向房间后面）
+        -holeHalfWidth, -holeHalfHeight, -holeHalfDepth,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+         holeHalfWidth, -holeHalfHeight, -holeHalfDepth,  0.0f,  0.0f, -1.0f,  1.0f, 0.0f,
+         holeHalfWidth,  holeHalfHeight, -holeHalfDepth,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+         holeHalfWidth,  holeHalfHeight, -holeHalfDepth,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+        -holeHalfWidth,  holeHalfHeight, -holeHalfDepth,  0.0f,  0.0f, -1.0f,  0.0f, 1.0f,
+        -holeHalfWidth, -holeHalfHeight, -holeHalfDepth,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+        
+        // 右面（+X方向）
+         holeHalfWidth, -holeHalfHeight, -holeHalfDepth,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+         holeHalfWidth, -holeHalfHeight,  holeHalfDepth,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+         holeHalfWidth,  holeHalfHeight,  holeHalfDepth,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+         holeHalfWidth,  holeHalfHeight,  holeHalfDepth,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+         holeHalfWidth,  holeHalfHeight, -holeHalfDepth,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+         holeHalfWidth, -holeHalfHeight, -holeHalfDepth,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+        
+        // 左面（-X方向）
+        -holeHalfWidth, -holeHalfHeight, -holeHalfDepth, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+        -holeHalfWidth, -holeHalfHeight,  holeHalfDepth, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+        -holeHalfWidth,  holeHalfHeight,  holeHalfDepth, -1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+        -holeHalfWidth,  holeHalfHeight,  holeHalfDepth, -1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+        -holeHalfWidth,  holeHalfHeight, -holeHalfDepth, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+        -holeHalfWidth, -holeHalfHeight, -holeHalfDepth, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f
+    };
+    
+    glGenVertexArrays(1, &liftedTileHoleVAO);
+    glGenBuffers(1, &liftedTileHoleVBO);
+    glBindVertexArray(liftedTileHoleVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, liftedTileHoleVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(liftedTileHoleVertices), liftedTileHoleVertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
+
     // --- 生成球体几何体（用于灵珠） ---
     std::vector<float> sphereVertices;
     std::vector<unsigned int> sphereIndices;
@@ -573,6 +764,39 @@ int main()
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(eIndices), eIndices, GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
+    glBindVertexArray(0);
+
+    // --- 创建屏幕空间消息显示的quad（用于显示"已拾取灵珠！"） ---
+    // 屏幕空间坐标（像素坐标）
+    float messageQuadWidth = 600.0f;  // 消息框宽度（放大）
+    float messageQuadHeight = 150.0f; // 消息框高度（放大）
+    float centerX = SCR_WIDTH / 2.0f;
+    float centerY = SCR_HEIGHT / 2.0f;
+    
+    float messageQuadVertices[] = {
+        // 屏幕空间坐标（像素坐标）
+        centerX - messageQuadWidth / 2.0f, centerY - messageQuadHeight / 2.0f,  // 左下
+        centerX + messageQuadWidth / 2.0f, centerY - messageQuadHeight / 2.0f,  // 右下
+        centerX + messageQuadWidth / 2.0f, centerY + messageQuadHeight / 2.0f,  // 右上
+        centerX - messageQuadWidth / 2.0f, centerY + messageQuadHeight / 2.0f   // 左上
+    };
+    
+    unsigned int messageQuadIndices[] = {
+        0, 1, 2,
+        2, 3, 0
+    };
+    
+    unsigned int messageQuadVAO, messageQuadVBO, messageQuadEBO;
+    glGenVertexArrays(1, &messageQuadVAO);
+    glGenBuffers(1, &messageQuadVBO);
+    glGenBuffers(1, &messageQuadEBO);
+    glBindVertexArray(messageQuadVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, messageQuadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(messageQuadVertices), messageQuadVertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, messageQuadEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(messageQuadIndices), messageQuadIndices, GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
     glBindVertexArray(0);
 
     // 统一房间用的顶点信息(每一个前面三个值为顶点坐标，中间三个值为法线向量，最后两个值为纹理坐标)
@@ -757,10 +981,40 @@ int main()
         // 输入
         // -----
         processInput(window);
+        
+        // 更新拾取消息显示时间
+        if (showOrbPickupMessage) {
+            orbPickupMessageTime += deltaTime;
+            if (orbPickupMessageTime >= ORB_PICKUP_MESSAGE_DURATION) {
+                showOrbPickupMessage = false;
+            }
+        }
 
         // 雷电逻辑
         if (lightning) {
             lightning->Update(deltaTime, isRaining, sandbox_heightmap);
+        }
+
+        // 检测两个马是否都在z轴尽头，触发地板翘起
+        if (areHorsesAtZAxisEnd()) {
+            if (!isFloorTileLifting) {
+                isFloorTileLifting = true;
+                std::cout << "触发地板翘起效果！" << std::endl;
+            }
+            // 更新翘起进度（0.0 到 1.0）- 正向旋转
+            floorLiftProgress = glm::min(1.0f, floorLiftProgress + floorLiftSpeed * deltaTime);
+        } else {
+            // 如果马离开了触发区域，反向旋转回去
+            if (isFloorTileLifting && floorLiftProgress > 0.0f) {
+                // 减少翘起进度（反向旋转）
+                floorLiftProgress = glm::max(0.0f, floorLiftProgress - floorLiftSpeed * deltaTime);
+                // 当进度降到0时，重置状态
+                if (floorLiftProgress <= 0.0f) {
+                    isFloorTileLifting = false;
+                    floorLiftProgress = 0.0f;
+                    std::cout << "地板恢复原状" << std::endl;
+                }
+            }
         }
 
         // 开始渲染
@@ -799,6 +1053,26 @@ int main()
         lightingShader.setVec3("lampLight.position", lampLightPos);
         lightingShader.setVec3("lampLight.color",    lampColor);
         lightingShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
+
+        // 设置灵珠点光源（用于照亮无盖长方体内部）
+        // 计算灵珠位置（与渲染灵珠时使用的位置相同）
+        glm::vec3 orbLightPos = glm::vec3(g_tileWorldCenterX, g_holeCenterY, g_tileWorldCenterZ);
+        // 计算灵珠颜色（与orb.fs中的计算方式相同，基于时间）
+        glm::vec3 orbColor;
+        orbColor.r = 0.5f + 0.5f * sinf(currentFrame * 2.0f + 0.0f);
+        orbColor.g = 0.5f + 0.5f * sinf(currentFrame * 2.0f + 2.094f);
+        orbColor.b = 0.5f + 0.5f * sinf(currentFrame * 2.0f + 4.189f);
+        // 归一化颜色，使其更鲜艳（与orb.fs中的计算方式相同）
+        if (glm::length(orbColor) > 0.001f) {
+            glm::vec3 normalizedOrbColor = glm::normalize(orbColor);
+            orbColor = normalizedOrbColor * 0.8f + orbColor * 0.2f;
+        }
+        // 只在触发翘起效果且未拾取时启用灵珠光源
+        bool orbLightEnabled = (isFloorTileLifting && floorLiftProgress > 0.0f && !orbPicked);
+        lightingShader.setBool("orbLightOn", orbLightEnabled);
+        lightingShader.setVec3("orbLight.position", orbLightPos);
+        lightingShader.setVec3("orbLight.color", orbColor);
+        lightingShader.setFloat("orbLight.intensity", orbLightEnabled ? 8.0f : 0.0f); // 增加亮度
 
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = camera.GetViewMatrix();
@@ -842,6 +1116,19 @@ int main()
             lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f); // 使用纹理时设为白色
             lightingShader.setBool("useTexture", true);
             lightingShader.setBool("isFloor", true); // 标识这是地板
+            lightingShader.setBool("isLiftedTile", false); // 这是主地板，不是翘起地板块
+
+            // 设置翘起区域排除参数（如果翘起地板块正在渲染）
+            if (isFloorTileLifting && floorLiftProgress > 0.0f) {
+                lightingShader.setBool("excludeLiftedTileRegion", true);
+                // 翘起地板块的世界坐标范围（向右平移0.5个单位后）
+                // 排除区域：X: 2.0 到 3.5, Z: -1.5 到 0.5
+                // 排除区域的中心：(2.75, -0.5) - 已在初始化时设置到全局变量g_tileWorldCenterX和g_tileWorldCenterZ
+                lightingShader.setVec2("liftedTileRegionMin", glm::vec2(2.0f, -1.5f));
+                lightingShader.setVec2("liftedTileRegionMax", glm::vec2(3.5f, 0.5f));
+            } else {
+                lightingShader.setBool("excludeLiftedTileRegion", false);
+            }
 
             // 绑定地砖纹理
             glActiveTexture(GL_TEXTURE0);
@@ -857,6 +1144,74 @@ int main()
             // 使用地板的VAO渲染（现在有36个顶点，6个面）
             glBindVertexArray(floorVAO);
             glDrawArrays(GL_TRIANGLES, 0, 36);
+            glBindVertexArray(0);
+        }
+
+        // 绘制翘起的地板块（如果触发）
+        if (isFloorTileLifting && floorLiftProgress > 0.0f) {
+            lightingShader.use();
+            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
+            lightingShader.setBool("useTexture", true);
+            lightingShader.setBool("isFloor", true);
+            lightingShader.setBool("isLiftedTile", true); // 这是翘起地板块，不应该被排除
+            lightingShader.setBool("excludeLiftedTileRegion", false); // 翘起地板块本身不需要排除
+
+            // 绑定地砖纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, floorTexture);
+            lightingShader.setInt("floorTexture", 0);
+
+            // 计算翘起角度（最大90度）
+            float maxLiftAngle = 90.0f;
+            float liftAngle = floorLiftProgress * maxLiftAngle;
+
+            // 设置模型变换：变换顺序（从右到左执行，代码从左到右写）：
+            // 1. 平移到世界位置（地板块中心）
+            // 2. 平移到旋转轴位置（前边缘的地板表面，z=tileHalfDepth, y=tileHalfHeight，作为支点）
+            // 3. 绕x轴旋转（正角度，让后边缘向上翘起）
+            // 4. 平移回中心（相对于前边缘地板表面的偏移）
+            model = glm::mat4(1.0f);
+            // 先平移到世界位置（地板块中心，使用与无盖长方体相同的全局变量位置）
+            model = glm::translate(model, glm::vec3(g_tileWorldCenterX, tileWorldCenterY, g_tileWorldCenterZ));
+            // 平移到旋转轴位置（前边缘的地板表面）
+            // 局部坐标中，前边缘在z=tileHalfDepth=1.0，地板表面在y=tileHalfHeight=0.075
+            // 支点应该在前边缘且在地板表面（不是地板块的中心y=0）
+            model = glm::translate(model, glm::vec3(0.0f, tileHalfHeight, tileHalfDepth));
+            // 绕x轴旋转（使用正角度，让后边缘向上翘起）
+            // 旋转角度为正，使得后边缘（z=-tileHalfDepth）向上旋转
+            model = glm::rotate(model, glm::radians(liftAngle), glm::vec3(1.0f, 0.0f, 0.0f));
+            // 平移回中心（相对于前边缘地板表面的偏移）
+            model = glm::translate(model, glm::vec3(0.0f, -tileHalfHeight, -tileHalfDepth));
+            lightingShader.setMat4("model", model);
+
+            // 渲染翘起的地板块
+            glBindVertexArray(liftedTileVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 36); // 翘起的地板块也有36个顶点（6个面）
+            glBindVertexArray(0);
+        }
+
+        // 绘制无盖长方体（洞，如果触发）
+        if (isFloorTileLifting && floorLiftProgress > 0.0f) {
+            lightingShader.use();
+            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
+            lightingShader.setBool("useTexture", true);
+            lightingShader.setBool("isFloor", true); // 使用地板纹理
+            lightingShader.setBool("isLiftedTile", false);
+            lightingShader.setBool("excludeLiftedTileRegion", false);
+
+            // 绑定地板纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, floorTexture);
+            lightingShader.setInt("floorTexture", 0);
+
+            // 设置模型变换（平移到翘起地板块的正下方，与翘起地板块位置对齐）
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(g_tileWorldCenterX, g_holeCenterY, g_tileWorldCenterZ));
+            lightingShader.setMat4("model", model);
+
+            // 渲染无盖长方体（5个面，30个顶点）
+            glBindVertexArray(liftedTileHoleVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 30);
             glBindVertexArray(0);
         }
 
@@ -1109,8 +1464,8 @@ int main()
             horseModel->Draw(modelShader);
         }
 
-        // --- 绘制灵珠 ---
-        if (orbShader) {
+        // --- 绘制灵珠（只在木板翘起且未拾取时渲染） ---
+        if (orbShader && isFloorTileLifting && floorLiftProgress > 0.0f && !orbPicked) {
             orbShader->use();
             orbShader->setMat4("projection", projection);
             orbShader->setMat4("view", view);
@@ -1131,10 +1486,10 @@ int main()
             // 设置时间（用于颜色变化）
             orbShader->setFloat("time", currentFrame);
             
-            // 设置模型变换（放在地板上，房间中心偏前）
-            // 地板顶部在y=-2.85，灵珠半径0.3，所以灵珠中心应该在y=-2.85+0.3=-2.55
+            // 设置模型变换（放在无盖长方体里面）
+            // 无盖长方体中心位置：X=g_tileWorldCenterX, Y=g_holeCenterY, Z=g_tileWorldCenterZ（与翘起地板块对齐）
             model = glm::mat4(1.0f);
-            model = glm::translate(model, sceneOrigin + glm::vec3(0.0f, -2.55f, 3.0f)); // 灵珠底部正好在地板顶部
+            model = glm::translate(model, glm::vec3(g_tileWorldCenterX, g_holeCenterY, g_tileWorldCenterZ));
             orbShader->setMat4("model", model);
             
             // 渲染球体
@@ -1242,6 +1597,25 @@ int main()
             lastShowEPrompt = false;
         }
         
+        // --- 检测是否靠近灵珠并显示E键提示（只在未拾取且木板翘起时） ---
+        static bool lastShowOrbEPrompt = false;
+        bool showOrbEPrompt = false;
+        glm::vec3 orbELetterPos(0.0f);
+        if (!orbPicked && isFloorTileLifting && floorLiftProgress > 0.0f && !isControllingHorse) {
+            glm::vec3 playerPos = camera.Position;
+            glm::vec3 orbPos = glm::vec3(g_tileWorldCenterX, g_holeCenterY, g_tileWorldCenterZ);
+            float distanceToOrb = glm::length(playerPos - orbPos);
+            showOrbEPrompt = distanceToOrb < INTERACTION_DISTANCE;
+            
+            if (showOrbEPrompt) {
+                // 确定E字位置（在灵珠上方）
+                orbELetterPos = orbPos + glm::vec3(0.0f, 0.5f, 0.0f);
+            }
+            lastShowOrbEPrompt = showOrbEPrompt;
+        } else {
+            lastShowOrbEPrompt = false;
+        }
+        
         // --- 渲染"E"字提示（世界空间，billboard，在HDR FBO中） ---
         if (showEPrompt && billboardShader && horseModel) {
             // 确保在HDR FBO中渲染
@@ -1260,6 +1634,35 @@ int main()
             
             // 设置billboard位置和大小（缩小一些）
             billboardShader->setVec3("centerPos", eLetterPos);
+            billboardShader->setVec2("size", glm::vec2(0.2f, 0.3f)); 
+            
+            glBindVertexArray(eVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+            
+            // 恢复状态
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_BLEND);
+        }
+        
+        // --- 渲染灵珠的"E"字提示（世界空间，billboard，在HDR FBO中） ---
+        if (showOrbEPrompt && billboardShader) {
+            // 确保在HDR FBO中渲染
+            glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+            
+            // 启用混合以支持透明度
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            // 禁用深度测试，确保E字始终显示在最前面
+            glDisable(GL_DEPTH_TEST);
+            
+            billboardShader->use();
+            billboardShader->setMat4("projection", projection);
+            billboardShader->setMat4("view", view);
+            billboardShader->setVec3("textColor", glm::vec3(1.0f, 1.0f, 0.0f)); // 黄色
+            
+            // 设置billboard位置和大小（缩小一些）
+            billboardShader->setVec3("centerPos", orbELetterPos);
             billboardShader->setVec2("size", glm::vec2(0.2f, 0.3f)); 
             
             glBindVertexArray(eVAO);
@@ -1323,6 +1726,39 @@ int main()
         glDrawArrays(GL_TRIANGLES, 0, 6);
         glBindVertexArray(0);
 
+        // --- 在屏幕中心显示拾取消息（在最终渲染后） ---
+        if (showOrbPickupMessage && textDisplayShader) {
+            // 确保在默认帧缓冲上渲染
+            glBindFramebuffer(GL_FRAMEBUFFER, 0);
+            
+            // 启用混合以支持透明度
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            // 禁用深度测试
+            glDisable(GL_DEPTH_TEST);
+            
+            textDisplayShader->use();
+            textDisplayShader->setVec2("screenSize", glm::vec2(SCR_WIDTH, SCR_HEIGHT));
+            textDisplayShader->setVec3("textColor", glm::vec3(1.0f, 1.0f, 0.0f)); // 黄色
+            // 根据剩余时间计算透明度（淡入淡出效果）
+            float fadeTime = 0.5f; // 淡入淡出时间（秒）
+            float alpha = 1.0f;
+            if (orbPickupMessageTime < fadeTime) {
+                alpha = orbPickupMessageTime / fadeTime; // 淡入
+            } else if (orbPickupMessageTime > ORB_PICKUP_MESSAGE_DURATION - fadeTime) {
+                alpha = (ORB_PICKUP_MESSAGE_DURATION - orbPickupMessageTime) / fadeTime; // 淡出
+            }
+            textDisplayShader->setFloat("alpha", alpha * 0.9f); // 稍微透明
+            
+            glBindVertexArray(messageQuadVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+            
+            // 恢复状态
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_BLEND);
+        }
+
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
@@ -1337,6 +1773,8 @@ int main()
     glDeleteVertexArrays(1, &wallVAO);
     glDeleteVertexArrays(1, &cloudVAO);
     glDeleteVertexArrays(1, &floorVAO);
+    glDeleteVertexArrays(1, &liftedTileVAO);
+    glDeleteVertexArrays(1, &liftedTileHoleVAO);
     
     glDeleteBuffers(1, &roomVBO);
     glDeleteBuffers(1, &windowVBO);
@@ -1344,6 +1782,8 @@ int main()
     glDeleteBuffers(1, &cloudVBO); 
     glDeleteBuffers(1, &cloudEBO);
     glDeleteBuffers(1, &floorVBO);
+    glDeleteBuffers(1, &liftedTileVBO);
+    glDeleteBuffers(1, &liftedTileHoleVBO);
     
     glDeleteTextures(1, &floorTexture);
     glDeleteTextures(1, &woodTexture);
@@ -1371,6 +1811,9 @@ int main()
     glDeleteVertexArrays(1, &eVAO);
     glDeleteBuffers(1, &eVBO);
     glDeleteBuffers(1, &eEBO);
+    glDeleteVertexArrays(1, &messageQuadVAO);
+    glDeleteBuffers(1, &messageQuadVBO);
+    glDeleteBuffers(1, &messageQuadEBO);
     if (textDisplayShader) delete textDisplayShader;
     if (billboardShader) delete billboardShader;
     if (orbShader) delete orbShader;
@@ -1391,7 +1834,7 @@ void processInput(GLFWwindow* window)
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
 
-    // E键处理：进入/退出控制模式
+    // E键处理：进入/退出控制模式 或 拾取灵珠
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS && !eKeyPressed) {
         eKeyPressed = true;
         if (isControllingHorse) {
@@ -1403,11 +1846,11 @@ void processInput(GLFWwindow* window)
             camera.ProcessMouseMovement(0.0f, 0.0f); // 触发向量更新
             std::cout << "退出控制模式" << std::endl;
         } else {
-            // 检查是否靠近马雕像
             glm::vec3 playerPos = camera.Position;
             bool nearHorse1 = isNearHorse(playerPos, horse1Position, INTERACTION_DISTANCE);
             bool nearHorse2 = isNearHorse(playerPos, horse2Position, INTERACTION_DISTANCE);
             
+            // 优先检查是否靠近马雕像（如果靠近马，就不检查灵珠）
             if (nearHorse1) {
                 // 保存当前相机状态（用于退出时恢复）
                 savedCameraPosition = camera.Position;
@@ -1440,6 +1883,19 @@ void processInput(GLFWwindow* window)
                 controlledHorseIndex = 1;
                 
                 std::cout << "进入控制模式 - 马雕像2" << std::endl;
+            } else {
+                // 只有在不靠近马雕像的情况下，才检查是否拾取灵珠
+                if (!orbPicked && isFloorTileLifting && floorLiftProgress > 0.0f) {
+                    glm::vec3 orbPos = glm::vec3(g_tileWorldCenterX, g_holeCenterY, g_tileWorldCenterZ);
+                    float distanceToOrb = glm::length(playerPos - orbPos);
+                    if (distanceToOrb < INTERACTION_DISTANCE) {
+                        // 拾取灵珠
+                        orbPicked = true;
+                        showOrbPickupMessage = true;
+                        orbPickupMessageTime = 0.0f;
+                        std::cout << "已拾取灵珠！" << std::endl;
+                    }
+                }
             }
         }
     }
@@ -1674,6 +2130,12 @@ glm::vec3 clampToRoomBounds(const glm::vec3& position)
     clamped.y = glm::clamp(clamped.y, -2.95f, 2.5f);
     clamped.z = glm::clamp(clamped.z, -3.5f, 3.5f);
     return clamped;
+}
+
+// 检查两个马是否都在z轴尽头
+bool areHorsesAtZAxisEnd()
+{
+    return (horse1Position.z >= Z_AXIS_THRESHOLD && horse2Position.z >= Z_AXIS_THRESHOLD);
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called

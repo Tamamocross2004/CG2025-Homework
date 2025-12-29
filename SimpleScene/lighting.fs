@@ -25,8 +25,27 @@ struct PointLight {
 uniform PointLight lampLight;
 uniform bool lampOn;
 
+// 灵珠点光源
+uniform PointLight orbLight;
+uniform bool orbLightOn;
+
+// 翘起区域排除（用于主地板）
+uniform bool excludeLiftedTileRegion;  // 是否排除翘起区域（只用于主地板）
+uniform bool isLiftedTile;             // 是否是翘起地板块（如果是，则不应该被排除）
+uniform vec2 liftedTileRegionMin;      // 翘起区域最小边界 (x, z)
+uniform vec2 liftedTileRegionMax;      // 翘起区域最大边界 (x, z)
+
 void main()
 {
+    // 如果是主地板（不是翘起地板块）且需要排除翘起区域，检查当前片段是否在翘起区域内
+    if (isFloor && excludeLiftedTileRegion && !isLiftedTile) {
+        vec2 fragXZ = FragPos.xz;
+        if (fragXZ.x >= liftedTileRegionMin.x && fragXZ.x <= liftedTileRegionMax.x &&
+            fragXZ.y >= liftedTileRegionMin.y && fragXZ.y <= liftedTileRegionMax.y) {
+            discard; // 丢弃这个片段，不渲染
+        }
+    }
+    
     // 获取基础颜色（纹理或对象颜色）
     vec3 baseColor = objectColor;
     if (useTexture) {
@@ -88,6 +107,36 @@ void main()
             intensityMultiplier = 1.0;
         }
         result += (diffuseL + specularL) * lampLight.intensity * att * intensityMultiplier;
+    }
+
+    // 灵珠点光源
+    if (orbLightOn) {
+        vec3 L = normalize(orbLight.position - FragPos);
+        float d = length(orbLight.position - FragPos);
+        
+        // 衰减（使用更宽松的衰减，让光照范围更大，特别适合照亮无盖长方体内部）
+        float att = 1.0 / (1.0 + 0.05 * d + 0.02 * d * d);
+        
+        float diffL = max(dot(norm, L), 0.0);
+        vec3 diffuseL = orbLight.color * diffL * baseColor;
+        
+        vec3 R = reflect(-L, norm);
+        float specL = pow(max(dot(viewDir, R), 0.0), 16.0);
+        vec3 specularL = orbLight.color * specL * baseColor * 0.5;
+        
+        // 根据是否是地板来调整强度倍数
+        float intensityMultiplier;
+        if (isFloor) {
+            // 地板使用较大倍数（增加亮度以照亮无盖长方体内部）
+            intensityMultiplier = 5.0;
+        } else if (useTexture) {
+            // 使用纹理但不是地板的对象（墙壁、天花板）使用较小倍数
+            intensityMultiplier = 0.4;
+        } else {
+            // 不使用纹理的对象
+            intensityMultiplier = 1.0;
+        }
+        result += (diffuseL + specularL) * orbLight.intensity * att * intensityMultiplier;
     }
   
     FragColor = vec4(result, 1.0);

@@ -33,7 +33,7 @@ void main()
     baseColor = normalize(baseColor) * 0.8 + baseColor * 0.2;
     
     // 添加自发光效果，使灵珠更亮
-    vec3 emission = baseColor * 0.3;
+    vec3 emission = baseColor * 2.0;
     
     // 环境光
     float ambientStrength = 0.3;
