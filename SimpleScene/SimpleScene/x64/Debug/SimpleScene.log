@@ -14,11 +14,11 @@ D:\code\OpenGL\Project\Homework1\SimpleScene\particle_system.h(1,1): warning C48
 D:\code\OpenGL\Project\Homework1\SimpleScene\lightning.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
   (编译源文件“main.cpp”)
   
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(652,26): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(657,31): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(696,42): warning C4267: “=”: 从“size_t”转换到“unsigned int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(855,27): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(859,33): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1308,51): warning C4305: “参数”: 从“double”到“float”截断
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1694,36): warning C4018: “<”: 有符号/无符号不匹配
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(826,26): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(831,31): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(870,42): warning C4267: “=”: 从“size_t”转换到“unsigned int”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1029,27): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1033,33): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1587,51): warning C4305: “参数”: 从“double”到“float”截断
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(2067,36): warning C4018: “<”: 有符号/无符号不匹配
   SimpleScene.vcxproj -> D:\code\OpenGL\Project\Homework1\SimpleScene\x64\Debug\SimpleScene.exe

@@ -110,6 +110,17 @@ float g_tileWorldCenterX = 0.0f;
 float g_holeCenterY = 0.0f;
 float g_tileWorldCenterZ = 0.0f;
 
+// 书柜按钮相关变量
+glm::vec3 shelfPosition(3.95f, -2.90f, 2.0f); // 书柜位置（可动态移动）
+glm::vec3 buttonPosition(3.94f, -1.2f, 3.0f); // 按钮位置
+bool buttonPressed = false;           // 按钮是否已按下
+bool showButtonEPrompt = false;       // 是否显示按钮的E提示
+glm::vec3 buttonELetterPos(0.0f);    // 按钮E提示的位置
+const float SHELF_MOVE_DISTANCE = 1.5f; // 书柜向z轴负方向平移的距离
+bool shelfMoving = false;             // 书柜是否正在移动
+float shelfMoveProgress = 0.0f;       // 书柜移动进度（0.0到1.0）
+const float SHELF_MOVE_SPEED = 1.0f; // 书柜移动速度
+
 int main()
 {
     // 初始化并配置glfw
@@ -230,6 +241,35 @@ int main()
         std::cout << "Warning: Failed to load horse statue model. Please export the .blend file as .obj or .fbx format and place it in the resource/horse_statue_01_4k.blend/ folder." << std::endl;
     }
 
+    // 加载书架模型（尝试多种可能的文件格式）
+    Model* shelfModel = nullptr;
+    std::vector<std::string> shelfPossiblePaths = {
+        "resource/Shelf_01_4k.blend/Shelf_01_4k.obj",
+        "resource/Shelf_01_4k.blend/Shelf_01_4k.fbx",
+        "resource/Shelf_01_4k.blend/Shelf_01_4k.blend"
+    };
+    for (const auto& path : shelfPossiblePaths) {
+        try {
+            shelfModel = new Model(path);
+            // 检查模型是否成功加载（通过检查是否有网格）
+            if (shelfModel && shelfModel->meshes.size() > 0) {
+                std::cout << "Loaded shelf model successfully from: " << path << std::endl;
+                break;
+            } else {
+                delete shelfModel;
+                shelfModel = nullptr;
+            }
+        } catch (...) {
+            if (shelfModel) {
+                delete shelfModel;
+                shelfModel = nullptr;
+            }
+        }
+    }
+    if (!shelfModel) {
+        std::cout << "Warning: Failed to load shelf model. Please export the .blend file as .obj or .fbx format and place it in the resource/Shelf_01_4k.blend/ folder." << std::endl;
+    }
+
     // --- 创建沙盘实例 ---
     // 方法1：从高度图创建
     TerrainSandbox sandbox_heightmap(
@@ -316,6 +356,36 @@ int main()
         std::cout << "Failed to load wood texture" << std::endl;
     }
     stbi_image_free(woodData);
+
+    // --- 加载砖墙纹理（用于书柜后面的墙） ---
+    unsigned int brickTexture;
+    glGenTextures(1, &brickTexture);
+    glBindTexture(GL_TEXTURE_2D, brickTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int brickWidth, brickHeight, brickNrChannels;
+    unsigned char *brickData = stbi_load("resource/pavement_04_4k.blend/textures/pavement_04_diff_4k.jpg", &brickWidth, &brickHeight, &brickNrChannels, 0);
+    if (brickData)
+    {
+        GLenum format = GL_RGB;
+        if (brickNrChannels == 1)
+            format = GL_RED;
+        else if (brickNrChannels == 3)
+            format = GL_RGB;
+        else if (brickNrChannels == 4)
+            format = GL_RGBA;
+        
+        glTexImage2D(GL_TEXTURE_2D, 0, format, brickWidth, brickHeight, 0, format, GL_UNSIGNED_BYTE, brickData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        std::cout << "Loaded brick texture successfully" << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to load brick texture" << std::endl;
+    }
+    stbi_image_free(brickData);
 
     // --- 加载云纹理 ---
     unsigned int cloudTexture;
@@ -632,6 +702,110 @@ int main()
     glEnableVertexAttribArray(0);
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
+
+    // --- 创建书柜后面墙上的砖墙正方形（用于右墙上的小方块） ---
+    // 正方形大小：1.0 x 1.0
+    // 位置：书柜后面，右墙内表面（x=3.95），高度在书柜中心附近
+    float brickSquareSize = 1.0f; // 正方形边长
+    float brickSquareHalfSize = brickSquareSize * 0.5f;
+    // 书柜位置：x=3.95, y=-2.90, z=2.0
+    // 砖墙方块位置：在书柜后面，z稍微靠后一些，比如z=2.5，高度与书柜中心对齐
+    float brickSquareVertices[] = {
+        // 位置(3) + 法线(3) + 纹理坐标(2) = 8个float
+        // 正方形在YZ平面（X=0），法线指向-X方向（朝向房间内部）
+        // 顶点顺序：左下、右下、右上、右上、左上、左下（逆时针，从房间内部看）
+        0.0f, -brickSquareHalfSize, -brickSquareHalfSize,  -1.0f, 0.0f, 0.0f,  0.0f, 0.0f,  // 左下
+        0.0f, -brickSquareHalfSize,  brickSquareHalfSize,  -1.0f, 0.0f, 0.0f,  1.0f, 0.0f,  // 右下
+        0.0f,  brickSquareHalfSize,  brickSquareHalfSize,  -1.0f, 0.0f, 0.0f,  1.0f, 1.0f,  // 右上
+        0.0f,  brickSquareHalfSize,  brickSquareHalfSize,  -1.0f, 0.0f, 0.0f,  1.0f, 1.0f,  // 右上
+        0.0f,  brickSquareHalfSize, -brickSquareHalfSize,  -1.0f, 0.0f, 0.0f,  0.0f, 1.0f,  // 左上
+        0.0f, -brickSquareHalfSize, -brickSquareHalfSize,  -1.0f, 0.0f, 0.0f,  0.0f, 0.0f   // 左下
+    };
+    
+    unsigned int brickSquareVAO, brickSquareVBO;
+    glGenVertexArrays(1, &brickSquareVAO);
+    glGenBuffers(1, &brickSquareVBO);
+    glBindVertexArray(brickSquareVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, brickSquareVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(brickSquareVertices), brickSquareVertices, GL_STATIC_DRAW);
+    // 位置属性
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    // 法线属性
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    // 纹理坐标属性
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
+
+    // --- 创建书柜按钮的正方体几何体 ---
+    // 按钮大小：0.2 x 0.2 x 0.2
+    float buttonSize = 0.2f;
+    float buttonHalfSize = buttonSize * 0.5f;
+    // 按钮在右墙上，在YZ平面（X=0），法线指向-X方向
+    float buttonVertices[] = {
+        // 位置(3) + 法线(3) + 纹理坐标(2) = 8个float
+        // 前面（朝向房间内部，法线指向-X方向）
+        0.0f, -buttonHalfSize, -buttonHalfSize,  -1.0f, 0.0f, 0.0f,  0.0f, 0.0f,  // 左下
+        0.0f, -buttonHalfSize,  buttonHalfSize,  -1.0f, 0.0f, 0.0f,  1.0f, 0.0f,  // 右下
+        0.0f,  buttonHalfSize,  buttonHalfSize,  -1.0f, 0.0f, 0.0f,  1.0f, 1.0f,  // 右上
+        0.0f,  buttonHalfSize,  buttonHalfSize,  -1.0f, 0.0f, 0.0f,  1.0f, 1.0f,  // 右上
+        0.0f,  buttonHalfSize, -buttonHalfSize,  -1.0f, 0.0f, 0.0f,  0.0f, 1.0f,  // 左上
+        0.0f, -buttonHalfSize, -buttonHalfSize,  -1.0f, 0.0f, 0.0f,  0.0f, 0.0f,  // 左下
+        // 后面（背向房间内部，法线指向+X方向）
+        0.0f, -buttonHalfSize, -buttonHalfSize,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
+        0.0f,  buttonHalfSize, -buttonHalfSize,  1.0f, 0.0f, 0.0f,  1.0f, 0.0f,
+        0.0f,  buttonHalfSize,  buttonHalfSize,  1.0f, 0.0f, 0.0f,  1.0f, 1.0f,
+        0.0f,  buttonHalfSize,  buttonHalfSize,  1.0f, 0.0f, 0.0f,  1.0f, 1.0f,
+        0.0f, -buttonHalfSize,  buttonHalfSize,  1.0f, 0.0f, 0.0f,  0.0f, 1.0f,
+        0.0f, -buttonHalfSize, -buttonHalfSize,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
+        // 顶部（法线指向+Y方向）
+        0.0f,  buttonHalfSize, -buttonHalfSize,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
+        0.0f,  buttonHalfSize,  buttonHalfSize,  0.0f, 1.0f, 0.0f,  1.0f, 0.0f,
+        0.0f,  buttonHalfSize,  buttonHalfSize,  0.0f, 1.0f, 0.0f,  1.0f, 1.0f,
+        0.0f,  buttonHalfSize,  buttonHalfSize,  0.0f, 1.0f, 0.0f,  1.0f, 1.0f,
+        0.0f,  buttonHalfSize, -buttonHalfSize,  0.0f, 1.0f, 0.0f,  0.0f, 1.0f,
+        0.0f,  buttonHalfSize, -buttonHalfSize,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
+        // 底部（法线指向-Y方向）
+        0.0f, -buttonHalfSize, -buttonHalfSize,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+        0.0f, -buttonHalfSize,  buttonHalfSize,  0.0f, -1.0f, 0.0f,  1.0f, 0.0f,
+        0.0f, -buttonHalfSize,  buttonHalfSize,  0.0f, -1.0f, 0.0f,  1.0f, 1.0f,
+        0.0f, -buttonHalfSize,  buttonHalfSize,  0.0f, -1.0f, 0.0f,  1.0f, 1.0f,
+        0.0f, -buttonHalfSize, -buttonHalfSize,  0.0f, -1.0f, 0.0f,  0.0f, 1.0f,
+        0.0f, -buttonHalfSize, -buttonHalfSize,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+        // 右面（法线指向+Z方向）
+        0.0f, -buttonHalfSize,  buttonHalfSize,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
+        0.0f,  buttonHalfSize,  buttonHalfSize,  0.0f, 0.0f, 1.0f,  1.0f, 0.0f,
+        0.0f,  buttonHalfSize,  buttonHalfSize,  0.0f, 0.0f, 1.0f,  1.0f, 1.0f,
+        0.0f,  buttonHalfSize,  buttonHalfSize,  0.0f, 0.0f, 1.0f,  1.0f, 1.0f,
+        0.0f, -buttonHalfSize,  buttonHalfSize,  0.0f, 0.0f, 1.0f,  0.0f, 1.0f,
+        0.0f, -buttonHalfSize,  buttonHalfSize,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
+        // 左面（法线指向-Z方向）
+        0.0f, -buttonHalfSize, -buttonHalfSize,  0.0f, 0.0f, -1.0f,  0.0f, 0.0f,
+        0.0f,  buttonHalfSize, -buttonHalfSize,  0.0f, 0.0f, -1.0f,  1.0f, 0.0f,
+        0.0f,  buttonHalfSize, -buttonHalfSize,  0.0f, 0.0f, -1.0f,  1.0f, 1.0f,
+        0.0f,  buttonHalfSize, -buttonHalfSize,  0.0f, 0.0f, -1.0f,  1.0f, 1.0f,
+        0.0f, -buttonHalfSize, -buttonHalfSize,  0.0f, 0.0f, -1.0f,  0.0f, 1.0f,
+        0.0f, -buttonHalfSize, -buttonHalfSize,  0.0f, 0.0f, -1.0f,  0.0f, 0.0f
+    };
+    
+    unsigned int buttonVAO, buttonVBO;
+    glGenVertexArrays(1, &buttonVAO);
+    glGenBuffers(1, &buttonVBO);
+    glBindVertexArray(buttonVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, buttonVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(buttonVertices), buttonVertices, GL_STATIC_DRAW);
+    // 位置属性
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    // 法线属性
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    // 纹理坐标属性
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
     glEnableVertexAttribArray(2);
     glBindVertexArray(0);
@@ -1093,6 +1267,8 @@ int main()
             lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f); // 使用纹理时设为白色
             lightingShader.setBool("useTexture", true);
             lightingShader.setBool("isFloor", false); // 不是地板
+            lightingShader.setBool("isHole", false); // 不是无盖长方体
+            lightingShader.setBool("excludeBrickSquareRegion", false); // 不是右墙，不需要排除砖墙区域
 
             // 绑定木纹纹理
             glActiveTexture(GL_TEXTURE0);
@@ -1117,6 +1293,8 @@ int main()
             lightingShader.setBool("useTexture", true);
             lightingShader.setBool("isFloor", true); // 标识这是地板
             lightingShader.setBool("isLiftedTile", false); // 这是主地板，不是翘起地板块
+            lightingShader.setBool("isHole", false); // 不是无盖长方体
+            lightingShader.setBool("excludeBrickSquareRegion", false); // 不是右墙，不需要排除砖墙区域
 
             // 设置翘起区域排除参数（如果翘起地板块正在渲染）
             if (isFloorTileLifting && floorLiftProgress > 0.0f) {
@@ -1154,6 +1332,8 @@ int main()
             lightingShader.setBool("useTexture", true);
             lightingShader.setBool("isFloor", true);
             lightingShader.setBool("isLiftedTile", true); // 这是翘起地板块，不应该被排除
+            lightingShader.setBool("isHole", false); // 不是无盖长方体
+            lightingShader.setBool("excludeBrickSquareRegion", false); // 不是右墙，不需要排除砖墙区域
             lightingShader.setBool("excludeLiftedTileRegion", false); // 翘起地板块本身不需要排除
 
             // 绑定地砖纹理
@@ -1197,6 +1377,8 @@ int main()
             lightingShader.setBool("useTexture", true);
             lightingShader.setBool("isFloor", true); // 使用地板纹理
             lightingShader.setBool("isLiftedTile", false);
+            lightingShader.setBool("isHole", true); // 标识这是无盖长方体（洞）
+            lightingShader.setBool("excludeBrickSquareRegion", false); // 不是右墙，不需要排除砖墙区域
             lightingShader.setBool("excludeLiftedTileRegion", false);
 
             // 绑定地板纹理
@@ -1221,6 +1403,8 @@ int main()
             lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f); // 使用纹理时设为白色
             lightingShader.setBool("useTexture", true);
             lightingShader.setBool("isFloor", false); // 不是地板
+            lightingShader.setBool("isHole", false); // 不是无盖长方体
+            lightingShader.setBool("excludeBrickSquareRegion", false); // 不是右墙，不需要排除砖墙区域
 
             // 绑定木纹纹理
             glActiveTexture(GL_TEXTURE0);
@@ -1246,6 +1430,16 @@ int main()
             lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f); // 使用纹理时设为白色
             lightingShader.setBool("useTexture", true);
             lightingShader.setBool("isFloor", false); // 不是地板
+            lightingShader.setBool("isHole", false); // 不是无盖长方体
+            lightingShader.setBool("isBrickSquare", false); // 不是砖墙正方形
+
+            // 设置砖墙区域排除参数
+            // 砖墙正方形位置：x=3.94, y=-2.20, z=2.2，大小1.0x1.0
+            // 所以Y范围：-2.20 ± 0.5 = -2.70 到 -1.70
+            // Z范围：2.2 ± 0.5 = 1.7 到 2.7
+            lightingShader.setBool("excludeBrickSquareRegion", true);
+            lightingShader.setVec2("brickSquareRegionMin", glm::vec2(-2.70f, 1.7f));  // (y, z) 最小边界
+            lightingShader.setVec2("brickSquareRegionMax", glm::vec2(-1.70f, 2.7f));  // (y, z) 最大边界
 
             // 绑定木纹纹理
             glActiveTexture(GL_TEXTURE0);
@@ -1260,6 +1454,87 @@ int main()
 
             // 渲染（roomVAO已经在左墙时绑定了）
             glDrawArrays(GL_TRIANGLES, 0, 36);
+        }
+
+        // --- 绘制书柜后面的砖墙正方形（在右墙上） ---
+        {
+            lightingShader.use();
+            // 确保设置必要的uniform（projection和view在循环开始时已设置，但需要确保它们仍然有效）
+            lightingShader.setMat4("projection", projection);
+            lightingShader.setMat4("view", view);
+            lightingShader.setVec3("lightPos", lightPos);
+            lightingShader.setVec3("viewPos", camera.Position);
+            lightingShader.setVec3("lightColor", finalLightColor);
+            // 设置台灯点光源
+            glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
+            glm::vec3 lampColor(1.0f, 0.9f, 0.7f);
+            lightingShader.setBool("lampOn", lampOn);
+            lightingShader.setVec3("lampLight.position", lampLightPos);
+            lightingShader.setVec3("lampLight.color", lampColor);
+            lightingShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
+            
+            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
+            lightingShader.setBool("useTexture", true);
+            lightingShader.setBool("isFloor", false);
+            lightingShader.setBool("isHole", false);
+            lightingShader.setBool("isBrickSquare", true); // 标识这是砖墙正方形，不应该被排除
+            lightingShader.setBool("excludeBrickSquareRegion", false); // 砖墙正方形本身不需要排除
+
+            // 绑定砖墙纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, brickTexture);
+            lightingShader.setInt("floorTexture", 0);
+
+            // 设置模型变换
+            // 书柜位置：x=3.45, y=-2.90, z=2.0
+            // 右墙内表面在 x=3.95（右墙中心x=4.0，厚度0.1，所以内表面在4.0-0.05=3.95）
+            // 砖墙方块：稍微突出墙面（x=3.94），避免与右墙内表面重合导致Z-fighting
+            // z稍微靠后（z=2.5），高度与书柜中心对齐（y=-2.90）
+            // 顶点定义中正方形已经在YZ平面（X=0），法线指向-X方向，所以不需要旋转
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(3.94f, -2.20f, 2.2f)); // 稍微突出墙面（3.94 < 3.95），避免Z-fighting
+            // 不需要旋转，因为顶点已经在YZ平面，法线已经指向-X方向
+            lightingShader.setMat4("model", model);
+
+            // 渲染砖墙正方形
+            glBindVertexArray(brickSquareVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
+            glBindVertexArray(0);
+        }
+
+        // --- 绘制书柜按钮（在书柜上方的墙上） ---
+        {
+            lightingShader.use();
+            lightingShader.setMat4("projection", projection);
+            lightingShader.setMat4("view", view);
+            lightingShader.setVec3("lightPos", lightPos);
+            lightingShader.setVec3("viewPos", camera.Position);
+            lightingShader.setVec3("lightColor", finalLightColor);
+            // 设置台灯点光源
+            glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
+            glm::vec3 lampColor(1.0f, 0.9f, 0.7f);
+            lightingShader.setBool("lampOn", lampOn);
+            lightingShader.setVec3("lampLight.position", lampLightPos);
+            lightingShader.setVec3("lampLight.color", lampColor);
+            lightingShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
+            
+            lightingShader.setVec3("objectColor", 0.8f, 0.2f, 0.2f); // 红色按钮
+            lightingShader.setBool("useTexture", false); // 不使用纹理
+            lightingShader.setBool("isFloor", false);
+            lightingShader.setBool("isHole", false);
+            lightingShader.setBool("excludeBrickSquareRegion", false);
+
+            // 设置模型变换
+            // 按钮位置：在书柜上方，右墙内表面
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, buttonPosition); // 按钮位置（书柜上方）
+            // 不需要旋转，因为顶点已经在YZ平面，法线已经指向-X方向
+            lightingShader.setMat4("model", model);
+
+            // 渲染按钮
+            glBindVertexArray(buttonVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 36); // 6个面，每个面6个顶点
+            glBindVertexArray(0);
         }
 
         // // 绘制后墙
@@ -1283,6 +1558,8 @@ int main()
             lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f); // 使用纹理时设为白色
             lightingShader.setBool("useTexture", true);
             lightingShader.setBool("isFloor", false); // 不是地板
+            lightingShader.setBool("isHole", false); // 不是无盖长方体
+            lightingShader.setBool("excludeBrickSquareRegion", false); // 不是右墙，不需要排除砖墙区域
 
             // 绑定木纹纹理
             glActiveTexture(GL_TEXTURE0);
@@ -1305,6 +1582,8 @@ int main()
             //设置物体颜色
             lightingShader.use();
             lightingShader.setBool("useTexture", false); // 窗户不使用纹理
+            lightingShader.setBool("isHole", false); // 不是无盖长方体
+            lightingShader.setBool("excludeBrickSquareRegion", false); // 不是右墙，不需要排除砖墙区域
             lightingShader.setVec3("objectColor", 0.36, 0.2f, 0.09f); // 木头颜色
 
             // 设置模型变换
@@ -1464,6 +1743,42 @@ int main()
             horseModel->Draw(modelShader);
         }
 
+        // --- 绘制书架模型（紧靠右墙） ---
+        if (shelfModel) {
+            modelShader.use();
+            modelShader.setMat4("projection", projection);
+            modelShader.setMat4("view", view);
+
+            // 设置房顶灯
+            modelShader.setVec3("viewPos", camera.Position);
+            modelShader.setVec3("light.position", lightPos); 
+            modelShader.setVec3("light.ambient", finalLightColor * 0.2f);
+            modelShader.setVec3("light.diffuse", finalLightColor);
+            modelShader.setVec3("light.specular", finalLightColor * 0.2f);
+
+            // 设置台灯点光源
+            glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
+            glm::vec3 lampColor(1.0f, 0.9f, 0.7f);
+            modelShader.setBool("lampOn", lampOn);
+            modelShader.setVec3("lampLight.position", lampLightPos);
+            modelShader.setVec3("lampLight.color", lampColor);
+            modelShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
+            modelShader.setBool("isLampModel", false);
+
+            // 设置书架位置和变换
+            // 右墙在x=4.0，厚度0.1，内表面在x=3.95左右
+            // 书架放在x=3.9，紧靠右墙，面向房间内部（面向负X方向，旋转180度）
+            // 使用动态位置，支持向左平移
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, shelfPosition); // 使用动态位置
+            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // 面向房间内部
+            model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(1.5f)); // 根据模型大小调整缩放
+            modelShader.setMat4("model", model);
+            shelfModel->Draw(modelShader);
+        }
+
         // --- 绘制灵珠（只在木板翘起且未拾取时渲染） ---
         if (orbShader && isFloorTileLifting && floorLiftProgress > 0.0f && !orbPicked) {
             orbShader->use();
@@ -1616,6 +1931,35 @@ int main()
             lastShowOrbEPrompt = false;
         }
         
+        // --- 检测是否靠近书柜按钮并显示E键提示（只在未按下且不在控制马时） ---
+        static bool lastShowButtonEPrompt = false;
+        showButtonEPrompt = false;
+        if (!buttonPressed && !isControllingHorse) {
+            glm::vec3 playerPos = camera.Position;
+            float distanceToButton = glm::length(playerPos - buttonPosition);
+            showButtonEPrompt = distanceToButton < INTERACTION_DISTANCE;
+            
+            if (showButtonEPrompt) {
+                // 确定E字位置（在按钮上方）
+                buttonELetterPos = buttonPosition + glm::vec3(0.0f, 0.3f, 0.0f);
+            }
+            lastShowButtonEPrompt = showButtonEPrompt;
+        } else {
+            lastShowButtonEPrompt = false;
+        }
+        
+        // --- 更新书柜移动动画 ---
+        if (shelfMoving) {
+            shelfMoveProgress = glm::min(1.0f, shelfMoveProgress + SHELF_MOVE_SPEED * deltaTime);
+            // 计算新的书柜位置（向z轴负方向平移，即向后移动）
+            float moveAmount = shelfMoveProgress * SHELF_MOVE_DISTANCE;
+            shelfPosition.z = 2.0f - moveAmount; // 向z轴负方向平移（Z减小，向后移动）
+            if (shelfMoveProgress >= 1.0f) {
+                shelfMoving = false;
+                std::cout << "书柜移动完成" << std::endl;
+            }
+        }
+        
         // --- 渲染"E"字提示（世界空间，billboard，在HDR FBO中） ---
         if (showEPrompt && billboardShader && horseModel) {
             // 确保在HDR FBO中渲染
@@ -1673,7 +2017,36 @@ int main()
             glEnable(GL_DEPTH_TEST);
             glDisable(GL_BLEND);
         }
-
+        
+        // --- 渲染按钮的"E"字提示（世界空间，billboard，在HDR FBO中） ---
+        if (showButtonEPrompt && billboardShader) {
+            // 确保在HDR FBO中渲染
+            glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+            
+            // 启用混合以支持透明度
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            // 禁用深度测试，确保E字始终显示在最前面
+            glDisable(GL_DEPTH_TEST);
+            
+            billboardShader->use();
+            billboardShader->setMat4("projection", projection);
+            billboardShader->setMat4("view", view);
+            billboardShader->setVec3("textColor", glm::vec3(1.0f, 1.0f, 0.0f)); // 黄色
+            
+            // 设置billboard位置和大小（缩小一些）
+            billboardShader->setVec3("centerPos", buttonELetterPos);
+            billboardShader->setVec2("size", glm::vec2(0.2f, 0.3f)); 
+            
+            glBindVertexArray(eVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+            
+            // 恢复状态
+            glEnable(GL_DEPTH_TEST);
+            glDisable(GL_BLEND);
+        }
+        
         // 提取超过亮度阈值的区域
         glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[0]);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -1775,6 +2148,8 @@ int main()
     glDeleteVertexArrays(1, &floorVAO);
     glDeleteVertexArrays(1, &liftedTileVAO);
     glDeleteVertexArrays(1, &liftedTileHoleVAO);
+    glDeleteVertexArrays(1, &brickSquareVAO);
+    glDeleteVertexArrays(1, &buttonVAO);
     
     glDeleteBuffers(1, &roomVBO);
     glDeleteBuffers(1, &windowVBO);
@@ -1784,9 +2159,12 @@ int main()
     glDeleteBuffers(1, &floorVBO);
     glDeleteBuffers(1, &liftedTileVBO);
     glDeleteBuffers(1, &liftedTileHoleVBO);
+    glDeleteBuffers(1, &brickSquareVBO);
+    glDeleteBuffers(1, &buttonVBO);
     
     glDeleteTextures(1, &floorTexture);
     glDeleteTextures(1, &woodTexture);
+    glDeleteTextures(1, &brickTexture);
 
     // 清理 Bloom 资源
     glDeleteFramebuffers(1, &hdrFBO);
@@ -1806,6 +2184,7 @@ int main()
 
     // 清理马雕像模型
     if (horseModel) delete horseModel;
+    if (shelfModel) delete shelfModel;
 
     // 清理文字显示资源
     glDeleteVertexArrays(1, &eVAO);
@@ -1884,7 +2263,19 @@ void processInput(GLFWwindow* window)
                 
                 std::cout << "进入控制模式 - 马雕像2" << std::endl;
             } else {
-                // 只有在不靠近马雕像的情况下，才检查是否拾取灵珠
+                // 只有在不靠近马雕像的情况下，才检查其他交互
+                // 优先检查按钮交互
+                if (!buttonPressed) {
+                    float distanceToButton = glm::length(playerPos - buttonPosition);
+                    if (distanceToButton < INTERACTION_DISTANCE) {
+                        // 按下按钮，触发书柜移动
+                        buttonPressed = true;
+                        shelfMoving = true;
+                        shelfMoveProgress = 0.0f;
+                        std::cout << "按下按钮，书柜开始向左移动" << std::endl;
+                    }
+                }
+                // 然后检查是否拾取灵珠
                 if (!orbPicked && isFloorTileLifting && floorLiftProgress > 0.0f) {
                     glm::vec3 orbPos = glm::vec3(g_tileWorldCenterX, g_holeCenterY, g_tileWorldCenterZ);
                     float distanceToOrb = glm::length(playerPos - orbPos);

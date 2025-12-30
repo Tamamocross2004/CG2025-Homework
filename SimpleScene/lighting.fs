@@ -32,8 +32,15 @@ uniform bool orbLightOn;
 // 翘起区域排除（用于主地板）
 uniform bool excludeLiftedTileRegion;  // 是否排除翘起区域（只用于主地板）
 uniform bool isLiftedTile;             // 是否是翘起地板块（如果是，则不应该被排除）
+uniform bool isHole;                   // 是否是无盖长方体（洞）
 uniform vec2 liftedTileRegionMin;      // 翘起区域最小边界 (x, z)
 uniform vec2 liftedTileRegionMax;      // 翘起区域最大边界 (x, z)
+
+// 砖墙区域排除（用于右墙）
+uniform bool excludeBrickSquareRegion; // 是否排除砖墙区域（只用于右墙）
+uniform bool isBrickSquare;            // 是否是砖墙正方形（如果是，则不应该被排除）
+uniform vec2 brickSquareRegionMin;     // 砖墙区域最小边界 (y, z)
+uniform vec2 brickSquareRegionMax;     // 砖墙区域最大边界 (y, z)
 
 void main()
 {
@@ -43,6 +50,19 @@ void main()
         if (fragXZ.x >= liftedTileRegionMin.x && fragXZ.x <= liftedTileRegionMax.x &&
             fragXZ.y >= liftedTileRegionMin.y && fragXZ.y <= liftedTileRegionMax.y) {
             discard; // 丢弃这个片段，不渲染
+        }
+    }
+    
+    // 如果是右墙且需要排除砖墙区域，检查当前片段是否在砖墙区域内
+    // 右墙是垂直的，所以检查Y和Z坐标
+    if (!isFloor && excludeBrickSquareRegion && !isBrickSquare) {
+        // 检查是否在右墙内表面附近（x约等于3.95）
+        if (FragPos.x >= 3.90f && FragPos.x <= 4.0f) {
+            vec2 fragYZ = FragPos.yz;
+            if (fragYZ.x >= brickSquareRegionMin.x && fragYZ.x <= brickSquareRegionMax.x &&
+                fragYZ.y >= brickSquareRegionMin.y && fragYZ.y <= brickSquareRegionMax.y) {
+                discard; // 丢弃这个片段，不渲染
+            }
         }
     }
     
@@ -79,14 +99,24 @@ void main()
         // 衰减（对地板使用更宽松的衰减，让光照范围更大）
         float att;
         if (useTexture) {
-            // 地板使用非常宽松的衰减参数，扩大光照范围
-            att = 1.0 / (1.0 + 0.1 * d + 0.05 * d * d);
+            // 地板使用非常宽松的衰减参数，扩大光照范围（进一步放宽以照亮无盖长方体内部）
+            att = 1.0 / (1.0 + 0.05 * d + 0.02 * d * d); // 从0.1/0.05改为0.05/0.02，衰减更慢
         } else {
             // 其他对象使用原来的衰减
             att = 1.0 / (1.0 + 0.35 * d + 0.44 * d * d);
         }
         
-        float diffL = max(dot(norm, L), 0.0);
+        // 对于无盖长方体内部，使用双向光照（让背向光源的面也能接收到光照）
+        float diffL;
+        if (isHole) {
+            // 无盖长方体内部：使用双向光照，让背向光源的面也能接收到一些光照
+            // 使用 abs(dot) 然后缩放，这样背向光源的面也能接收到光照
+            float dotNL = dot(norm, L);
+            diffL = max(dotNL, 0.0) + max(-dotNL, 0.0) * 0.3; // 正向100%，背向30%
+        } else {
+            // 其他对象：正常单向光照
+            diffL = max(dot(norm, L), 0.0);
+        }
         vec3 diffuseL = lampLight.color * diffL * baseColor;
         
         vec3 R = reflect(-L, norm);
@@ -97,8 +127,13 @@ void main()
         // 地板使用较大倍数，让地板更亮；墙壁和天花板使用较小倍数
         float intensityMultiplier;
         if (isFloor) {
-            // 地板使用较大倍数，让地板更亮
-            intensityMultiplier = 2.5;
+            // 地板使用较大倍数，让地板更亮（特别增加无盖长方体内部的亮度）
+            if (isHole) {
+                // 无盖长方体内部使用更大的倍数
+                intensityMultiplier = 3.0;
+            } else {
+                intensityMultiplier = 2.0;
+            }
         } else if (useTexture) {
             // 使用纹理但不是地板的对象（墙壁、天花板）使用较小倍数
             intensityMultiplier = 0.4;
