@@ -111,7 +111,8 @@ float g_holeCenterY = 0.0f;
 float g_tileWorldCenterZ = 0.0f;
 
 // 书柜按钮相关变量
-glm::vec3 shelfPosition(3.95f, -2.90f, 2.0f); // 书柜位置（可动态移动）
+// glm::vec3 shelfPosition(3.95f, -2.90f, 2.0f); // 书柜位置（可动态移动）
+glm::vec3 shelfPosition(3.55f, -1.15f, 2.0f); // 书柜位置（可动态移动）
 glm::vec3 buttonPosition(3.94f, -1.2f, 3.0f); // 按钮位置
 bool buttonPressed = false;           // 按钮是否已按下
 bool showButtonEPrompt = false;       // 是否显示按钮的E提示
@@ -120,6 +121,16 @@ const float SHELF_MOVE_DISTANCE = 1.5f; // 书柜向z轴负方向平移的距离
 bool shelfMoving = false;             // 书柜是否正在移动
 float shelfMoveProgress = 0.0f;       // 书柜移动进度（0.0到1.0）
 const float SHELF_MOVE_SPEED = 1.0f; // 书柜移动速度
+// 砖墙旋转相关变量
+bool brickSquareRotating = false;     // 砖墙是否正在旋转
+bool brickSquareRotatingBack = false; // 砖墙是否正在反向旋转
+float brickSquareRotationProgress = 0.0f; // 砖墙旋转进度（0.0到1.0）
+float brickSquareRestTime = 0.0f;     // 砖墙旋转完成后的静止时间
+const float BRICK_SQUARE_ROTATION_SPEED = 0.5f; // 砖墙旋转速度（每秒）
+const float BRICK_SQUARE_ROTATION_ANGLE = 90.0f; // 砖墙旋转角度（度）
+const float BRICK_SQUARE_REST_DURATION = 2.0f; // 砖墙旋转完成后的静止时间（秒）
+const float SHELF_INITIAL_Z = 2.0f;   // 书柜初始Z位置
+bool shelfMovingBack = false;         // 书柜是否正在反向移动
 
 int main()
 {
@@ -241,33 +252,24 @@ int main()
         std::cout << "Warning: Failed to load horse statue model. Please export the .blend file as .obj or .fbx format and place it in the resource/horse_statue_01_4k.blend/ folder." << std::endl;
     }
 
-    // 加载书架模型（尝试多种可能的文件格式）
+    // 加载书架模型
     Model* shelfModel = nullptr;
-    std::vector<std::string> shelfPossiblePaths = {
-        "resource/Shelf_01_4k.blend/Shelf_01_4k.obj",
-        "resource/Shelf_01_4k.blend/Shelf_01_4k.fbx",
-        "resource/Shelf_01_4k.blend/Shelf_01_4k.blend"
-    };
-    for (const auto& path : shelfPossiblePaths) {
-        try {
-            shelfModel = new Model(path);
-            // 检查模型是否成功加载（通过检查是否有网格）
-            if (shelfModel && shelfModel->meshes.size() > 0) {
-                std::cout << "Loaded shelf model successfully from: " << path << std::endl;
-                break;
-            } else {
-                delete shelfModel;
-                shelfModel = nullptr;
-            }
-        } catch (...) {
-            if (shelfModel) {
-                delete shelfModel;
-                shelfModel = nullptr;
-            }
+    try {
+        shelfModel = new Model("resource/shelf/bookcase1.obj");
+        // 检查模型是否成功加载（通过检查是否有网格）
+        if (shelfModel && shelfModel->meshes.size() > 0) {
+            std::cout << "Loaded shelf model successfully from: resource/shelf/bookcase1.obj" << std::endl;
+        } else {
+            delete shelfModel;
+            shelfModel = nullptr;
+            std::cout << "Warning: Failed to load shelf model from resource/shelf/bookcase1.obj" << std::endl;
         }
-    }
-    if (!shelfModel) {
-        std::cout << "Warning: Failed to load shelf model. Please export the .blend file as .obj or .fbx format and place it in the resource/Shelf_01_4k.blend/ folder." << std::endl;
+    } catch (...) {
+        if (shelfModel) {
+            delete shelfModel;
+            shelfModel = nullptr;
+        }
+        std::cout << "Warning: Failed to load shelf model from resource/shelf/bookcase1.obj" << std::endl;
     }
 
     // --- 创建沙盘实例 ---
@@ -1490,10 +1492,19 @@ int main()
             // 右墙内表面在 x=3.95（右墙中心x=4.0，厚度0.1，所以内表面在4.0-0.05=3.95）
             // 砖墙方块：稍微突出墙面（x=3.94），避免与右墙内表面重合导致Z-fighting
             // z稍微靠后（z=2.5），高度与书柜中心对齐（y=-2.90）
-            // 顶点定义中正方形已经在YZ平面（X=0），法线指向-X方向，所以不需要旋转
+            // 顶点定义中正方形已经在YZ平面（X=0），法线指向-X方向
+            // 旋转：以z值较小的竖边（z=-0.5，沿Y方向）为轴，绕Y轴旋转，向室内旋转90度
+            glm::vec3 brickSquarePos(3.94f, -2.20f, 2.2f); // 砖墙位置
+            float brickSquareHalfSize = 0.5f; // 砖墙大小的一半（1.0/2）
             model = glm::mat4(1.0f);
-            model = glm::translate(model, glm::vec3(3.94f, -2.20f, 2.2f)); // 稍微突出墙面（3.94 < 3.95），避免Z-fighting
-            // 不需要旋转，因为顶点已经在YZ平面，法线已经指向-X方向
+            model = glm::translate(model, brickSquarePos); // 平移到砖墙位置
+            // 平移到旋转轴位置（z值较小的竖边，z=-0.5）
+            model = glm::translate(model, glm::vec3(0.0f, 0.0f, -brickSquareHalfSize));
+            // 应用旋转：绕Y轴旋转，向室内旋转（正角度，让砖墙向室内方向旋转）
+            float rotationAngle = brickSquareRotationProgress * BRICK_SQUARE_ROTATION_ANGLE;
+            model = glm::rotate(model, glm::radians(-rotationAngle), glm::vec3(0.0f, 1.0f, 0.0f));
+            // 平移回砖墙中心
+            model = glm::translate(model, glm::vec3(0.0f, 0.0f, brickSquareHalfSize));
             lightingShader.setMat4("model", model);
 
             // 渲染砖墙正方形
@@ -1771,10 +1782,10 @@ int main()
             // 使用动态位置，支持向左平移
             model = glm::mat4(1.0f);
             model = glm::translate(model, shelfPosition); // 使用动态位置
-            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // 面向房间内部
-            model = glm::rotate(model, glm::radians(180.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-            model = glm::rotate(model, glm::radians(90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-            model = glm::scale(model, glm::vec3(1.5f)); // 根据模型大小调整缩放
+            model = glm::rotate(model, glm::radians(-90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // 面向房间内部
+            model = glm::rotate(model, glm::radians(0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
+            model = glm::rotate(model, glm::radians(0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+            model = glm::scale(model, glm::vec3(0.2f)); // 根据模型大小调整缩放
             modelShader.setMat4("model", model);
             shelfModel->Draw(modelShader);
         }
@@ -1953,10 +1964,65 @@ int main()
             shelfMoveProgress = glm::min(1.0f, shelfMoveProgress + SHELF_MOVE_SPEED * deltaTime);
             // 计算新的书柜位置（向z轴负方向平移，即向后移动）
             float moveAmount = shelfMoveProgress * SHELF_MOVE_DISTANCE;
-            shelfPosition.z = 2.0f - moveAmount; // 向z轴负方向平移（Z减小，向后移动）
+            shelfPosition.z = SHELF_INITIAL_Z - moveAmount; // 向z轴负方向平移（Z减小，向后移动）
             if (shelfMoveProgress >= 1.0f) {
                 shelfMoving = false;
-                std::cout << "书柜移动完成" << std::endl;
+                // 书柜移动完成后，触发砖墙旋转
+                if (!brickSquareRotating && !brickSquareRotatingBack) {
+                    brickSquareRotating = true;
+                    brickSquareRotationProgress = 0.0f;
+                    std::cout << "书柜移动完成，砖墙开始旋转" << std::endl;
+                }
+            }
+        }
+        
+        // --- 更新书柜反向移动动画 ---
+        if (shelfMovingBack) {
+            shelfMoveProgress = glm::max(0.0f, shelfMoveProgress - SHELF_MOVE_SPEED * deltaTime);
+            // 计算新的书柜位置（向z轴正方向平移，即向前移动回原位置）
+            float moveAmount = shelfMoveProgress * SHELF_MOVE_DISTANCE;
+            shelfPosition.z = SHELF_INITIAL_Z - moveAmount; // 向z轴正方向平移回原位置
+            if (shelfMoveProgress <= 0.0f) {
+                shelfMovingBack = false;
+                shelfMoveProgress = 0.0f;
+                shelfPosition.z = SHELF_INITIAL_Z; // 确保回到初始位置
+                // 书柜反向移动完成后，恢复按钮状态
+                buttonPressed = false;
+                std::cout << "书柜回到原位置，按钮恢复可按状态" << std::endl;
+            }
+        }
+        
+        // --- 更新砖墙旋转动画 ---
+        if (brickSquareRotating) {
+            brickSquareRotationProgress = glm::min(1.0f, brickSquareRotationProgress + BRICK_SQUARE_ROTATION_SPEED * deltaTime);
+            if (brickSquareRotationProgress >= 1.0f) {
+                brickSquareRotating = false;
+                brickSquareRotationProgress = 1.0f; // 保持最终角度
+                brickSquareRestTime = 0.0f; // 开始计时静止时间
+                std::cout << "砖墙旋转完成，开始静止2秒" << std::endl;
+            }
+        }
+        
+        // --- 更新砖墙静止时间 ---
+        if (!brickSquareRotating && !brickSquareRotatingBack && brickSquareRotationProgress >= 1.0f) {
+            brickSquareRestTime += deltaTime;
+            if (brickSquareRestTime >= BRICK_SQUARE_REST_DURATION) {
+                // 静止时间结束，开始反向旋转
+                brickSquareRotatingBack = true;
+                brickSquareRestTime = 0.0f;
+                std::cout << "静止时间结束，砖墙开始反向旋转" << std::endl;
+            }
+        }
+        
+        // --- 更新砖墙反向旋转动画 ---
+        if (brickSquareRotatingBack) {
+            brickSquareRotationProgress = glm::max(0.0f, brickSquareRotationProgress - BRICK_SQUARE_ROTATION_SPEED * deltaTime);
+            if (brickSquareRotationProgress <= 0.0f) {
+                brickSquareRotatingBack = false;
+                brickSquareRotationProgress = 0.0f; // 确保回到初始角度
+                // 砖墙反向旋转完成后，开始书柜反向移动
+                shelfMovingBack = true;
+                std::cout << "砖墙反向旋转完成，书柜开始反向移动" << std::endl;
             }
         }
         
