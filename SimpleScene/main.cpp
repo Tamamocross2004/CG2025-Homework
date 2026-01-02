@@ -14,6 +14,7 @@
 #include "sandbox_mesh.h"
 #include "particle_system.h"
 #include "lightning.h"
+#include "arrow_system.h"
 
 #include <iostream>
 #include <vector>
@@ -117,7 +118,7 @@ glm::vec3 buttonPosition(3.94f, -1.2f, 3.0f); // 按钮位置
 bool buttonPressed = false;           // 按钮是否已按下
 bool showButtonEPrompt = false;       // 是否显示按钮的E提示
 glm::vec3 buttonELetterPos(0.0f);    // 按钮E提示的位置
-const float SHELF_MOVE_DISTANCE = 1.5f; // 书柜向z轴负方向平移的距离
+const float SHELF_MOVE_DISTANCE = 2.5f; // 书柜向z轴负方向平移的距离
 bool shelfMoving = false;             // 书柜是否正在移动
 float shelfMoveProgress = 0.0f;       // 书柜移动进度（0.0到1.0）
 const float SHELF_MOVE_SPEED = 1.0f; // 书柜移动速度
@@ -270,6 +271,26 @@ int main()
             shelfModel = nullptr;
         }
         std::cout << "Warning: Failed to load shelf model from resource/shelf/bookcase1.obj" << std::endl;
+    }
+
+    // 加载箭头模型
+    Model* arrowModel = nullptr;
+    try {
+        arrowModel = new Model("resource/arrow/arrow1.obj");
+        // 检查模型是否成功加载（通过检查是否有网格）
+        if (arrowModel && arrowModel->meshes.size() > 0) {
+            std::cout << "Loaded arrow model successfully from: resource/arrow/arrow1.obj" << std::endl;
+        } else {
+            delete arrowModel;
+            arrowModel = nullptr;
+            std::cout << "Warning: Failed to load arrow model from resource/arrow/arrow1.obj" << std::endl;
+        }
+    } catch (...) {
+        if (arrowModel) {
+            delete arrowModel;
+            arrowModel = nullptr;
+        }
+        std::cout << "Warning: Failed to load arrow model from resource/arrow/arrow1.obj" << std::endl;
     }
 
     // --- 创建沙盘实例 ---
@@ -434,6 +455,36 @@ int main()
         lightning = new Lightning(lightningShader, lightningTexture);
     }
 
+    // 创建 ArrowSystem 对象（砖墙处）
+    ArrowSystem* arrowSystem = nullptr;
+    if (arrowModel) {
+        // 砖墙位置：x=3.94, y=-2.20, z=2.2
+        // 箭头从砖墙中心发射，朝向房间内部（负X方向）
+        glm::vec3 arrowSpawnPos(3.94f, -2.20f, 2.2f);
+        arrowSystem = new ArrowSystem(arrowModel, &modelShader, arrowSpawnPos);
+        // 设置发射方向（朝向房间内部，即负X方向）
+        arrowSystem->SetSpawnDirection(glm::normalize(glm::vec3(-1.0f, 0.0f, 0.0f)));
+        std::cout << "Arrow system initialized" << std::endl;
+    }
+
+    // 创建 ArrowSystem 对象（窗外）
+    ArrowSystem* windowArrowSystem = nullptr;
+    if (arrowModel) {
+        // 窗户位置：后墙在z=-4.0，窗户在后墙前一点
+        // 箭头从窗外发射，位置在窗户外面（z=-5.0），朝向房间内部（z轴正方向）
+        glm::vec3 windowArrowSpawnPos(0.0f, 0.0f, -5.0f);
+        windowArrowSystem = new ArrowSystem(arrowModel, &modelShader, windowArrowSpawnPos);
+        // 设置发射方向（朝向房间内部，即z轴正方向）
+        windowArrowSystem->SetSpawnDirection(glm::normalize(glm::vec3(0.0f, 0.0f, 1.0f)));
+        
+        // 设置窗外箭头的旋转角度（使其朝向z轴正方向）
+        // 如果箭头模型默认朝向y轴负方向，要转到z轴正方向：
+        // 先绕x轴旋转90度：y负 -> z正
+        windowArrowSystem->SetRotationOffset(90.0f, 0.0f, 0.0f);  // 绕X轴旋转90度
+        
+        std::cout << "Window arrow system initialized" << std::endl;
+    }
+
     // --- 创建云的平面顶点 ---
     float cloudVertices[] = {
         // positions         // texture Coords
@@ -551,15 +602,15 @@ int main()
     
     // 翘起地板块向右平移后的位置（同时也是排除区域的中心）
     float tileWorldCenterX = tileProjectionCenterX + 0.5f;  // 向右平移0.5个单位 = 2.75
-    float tileWorldCenterZ = tileProjectionCenterZ;  // Z坐标不变 = -0.5
+    float tileWorldCenterZ = tileProjectionCenterZ - 1.0f;  // Z坐标向负方向移动1.0个单位 = -1.5
     // 排除区域的中心坐标（用于翘起地板块、无盖长方体和灵珠的位置）
-    // 排除区域：X: 2.0 到 3.5, Z: -1.5 到 0.5
-    // 中心：(2.75, -0.5) - 与翘起地板块位置一致
+    // 排除区域：X: 2.0 到 3.5, Z: -2.5 到 -0.5（整体向z轴负方向移动1.0个单位）
+    // 中心：(2.75, -1.5) - 与翘起地板块位置一致
     float excludedRegionCenterX = (2.0f + 3.5f) * 0.5f;  // 2.75（与tileWorldCenterX一致）
-    float excludedRegionCenterZ = (-1.5f + 0.5f) * 0.5f; // -0.5（与tileWorldCenterZ一致）
+    float excludedRegionCenterZ = (-2.5f + (-0.5f)) * 0.5f; // -1.5（与tileWorldCenterZ一致）
     // 保存到全局变量，供翘起地板块、无盖长方体、灵珠和processInput使用（确保位置一致）
     g_tileWorldCenterX = excludedRegionCenterX;  // 2.75
-    g_tileWorldCenterZ = excludedRegionCenterZ;  // -0.5
+    g_tileWorldCenterZ = excludedRegionCenterZ;  // -1.5
     // 主地板：translate(0, -2.50, 0) + scale(8.0, 1.0, 8.0)
     // 主地板局部坐标：y从-0.5到-0.35（相对于地板中心）
     // 主地板顶部世界坐标：-2.50 + (-0.35) × 1.0 = -2.85
@@ -1301,11 +1352,11 @@ int main()
             // 设置翘起区域排除参数（如果翘起地板块正在渲染）
             if (isFloorTileLifting && floorLiftProgress > 0.0f) {
                 lightingShader.setBool("excludeLiftedTileRegion", true);
-                // 翘起地板块的世界坐标范围（向右平移0.5个单位后）
-                // 排除区域：X: 2.0 到 3.5, Z: -1.5 到 0.5
-                // 排除区域的中心：(2.75, -0.5) - 已在初始化时设置到全局变量g_tileWorldCenterX和g_tileWorldCenterZ
-                lightingShader.setVec2("liftedTileRegionMin", glm::vec2(2.0f, -1.5f));
-                lightingShader.setVec2("liftedTileRegionMax", glm::vec2(3.5f, 0.5f));
+                // 翘起地板块的世界坐标范围（向右平移0.5个单位，向z轴负方向移动1.0个单位后）
+                // 排除区域：X: 2.0 到 3.5, Z: -2.5 到 -0.5
+                // 排除区域的中心：(2.75, -1.5) - 已在初始化时设置到全局变量g_tileWorldCenterX和g_tileWorldCenterZ
+                lightingShader.setVec2("liftedTileRegionMin", glm::vec2(2.0f, -2.5f));
+                lightingShader.setVec2("liftedTileRegionMax", glm::vec2(3.5f, -0.5f));
             } else {
                 lightingShader.setBool("excludeLiftedTileRegion", false);
             }
@@ -1511,6 +1562,14 @@ int main()
             glBindVertexArray(brickSquareVAO);
             glDrawArrays(GL_TRIANGLES, 0, 6);
             glBindVertexArray(0);
+        }
+
+        // --- 绘制箭头系统 ---
+        if (arrowSystem) {
+            arrowSystem->Draw(view, projection, lightPos, camera.Position, finalLightColor);
+        }
+        if (windowArrowSystem) {
+            windowArrowSystem->Draw(view, projection, lightPos, camera.Position, finalLightColor);
         }
 
         // --- 绘制书柜按钮（在书柜上方的墙上） ---
@@ -2000,6 +2059,15 @@ int main()
                 brickSquareRotationProgress = 1.0f; // 保持最终角度
                 brickSquareRestTime = 0.0f; // 开始计时静止时间
                 std::cout << "砖墙旋转完成，开始静止2秒" << std::endl;
+                // 砖墙旋转完成，开始发射箭头（砖墙处和窗外同时开始）
+                if (arrowSystem) {
+                    arrowSystem->StartShooting();
+                    std::cout << "开始发射箭头（砖墙处）" << std::endl;
+                }
+                if (windowArrowSystem) {
+                    windowArrowSystem->StartShooting();
+                    std::cout << "开始发射箭头（窗外）" << std::endl;
+                }
             }
         }
         
@@ -2011,6 +2079,15 @@ int main()
                 brickSquareRotatingBack = true;
                 brickSquareRestTime = 0.0f;
                 std::cout << "静止时间结束，砖墙开始反向旋转" << std::endl;
+                // 砖墙开始恢复，停止发射箭头（砖墙处和窗外同时停止）
+                if (arrowSystem) {
+                    arrowSystem->StopShooting();
+                    std::cout << "停止发射箭头（砖墙处）" << std::endl;
+                }
+                if (windowArrowSystem) {
+                    windowArrowSystem->StopShooting();
+                    std::cout << "停止发射箭头（窗外）" << std::endl;
+                }
             }
         }
         
@@ -2024,6 +2101,14 @@ int main()
                 shelfMovingBack = true;
                 std::cout << "砖墙反向旋转完成，书柜开始反向移动" << std::endl;
             }
+        }
+        
+        // --- 更新箭头系统 ---
+        if (arrowSystem) {
+            arrowSystem->Update(deltaTime);
+        }
+        if (windowArrowSystem) {
+            windowArrowSystem->Update(deltaTime);
         }
         
         // --- 渲染"E"字提示（世界空间，billboard，在HDR FBO中） ---
@@ -2251,6 +2336,9 @@ int main()
     // 清理马雕像模型
     if (horseModel) delete horseModel;
     if (shelfModel) delete shelfModel;
+    if (arrowModel) delete arrowModel;
+    if (arrowSystem) delete arrowSystem;
+    if (windowArrowSystem) delete windowArrowSystem;
 
     // 清理文字显示资源
     glDeleteVertexArrays(1, &eVAO);

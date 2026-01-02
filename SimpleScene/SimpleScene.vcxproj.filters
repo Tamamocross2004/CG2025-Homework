@@ -36,6 +36,9 @@
     <ClInclude Include="lightning.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="arrow_system.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="lightcube.fs">
@@ -68,6 +71,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="lightning.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="arrow_system.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>
