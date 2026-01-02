@@ -111,13 +111,13 @@ float g_tileWorldCenterX = 0.0f;
 float g_holeCenterY = 0.0f;
 float g_tileWorldCenterZ = 0.0f;
 
-// 书柜按钮相关变量
+// 书柜按钮相关变量（已注释，改用马的旋转触发）
 // glm::vec3 shelfPosition(3.95f, -2.90f, 2.0f); // 书柜位置（可动态移动）
 glm::vec3 shelfPosition(3.55f, -1.15f, 2.0f); // 书柜位置（可动态移动）
-glm::vec3 buttonPosition(3.94f, -1.2f, 3.0f); // 按钮位置
-bool buttonPressed = false;           // 按钮是否已按下
-bool showButtonEPrompt = false;       // 是否显示按钮的E提示
-glm::vec3 buttonELetterPos(0.0f);    // 按钮E提示的位置
+// glm::vec3 buttonPosition(3.94f, -1.2f, 3.0f); // 按钮位置（已注释）
+// bool buttonPressed = false;           // 按钮是否已按下（已注释）
+// bool showButtonEPrompt = false;       // 是否显示按钮的E提示（已注释）
+// glm::vec3 buttonELetterPos(0.0f);    // 按钮E提示的位置（已注释）
 const float SHELF_MOVE_DISTANCE = 2.5f; // 书柜向z轴负方向平移的距离
 bool shelfMoving = false;             // 书柜是否正在移动
 float shelfMoveProgress = 0.0f;       // 书柜移动进度（0.0到1.0）
@@ -132,6 +132,13 @@ const float BRICK_SQUARE_ROTATION_ANGLE = 90.0f; // 砖墙旋转角度（度）
 const float BRICK_SQUARE_REST_DURATION = 2.0f; // 砖墙旋转完成后的静止时间（秒）
 const float SHELF_INITIAL_Z = 2.0f;   // 书柜初始Z位置
 bool shelfMovingBack = false;         // 书柜是否正在反向移动
+// 马的旋转触发相关变量
+float horse1InitialRotationY = 90.0f;  // 马1的初始Y轴旋转角度
+float horse2InitialRotationY = -90.0f; // 马2的初始Y轴旋转角度
+float horse1AccumulatedRotation = 0.0f; // 马1累计转过的度数（从初始角度开始）
+float horse2AccumulatedRotation = 0.0f; // 马2累计转过的度数（从初始角度开始）
+const float HORSE_ROTATION_THRESHOLD = 45.0f; // 触发动画所需的旋转角度阈值（度）
+bool isAnimationSequenceActive = false; // 动画序列是否正在执行（书柜移动、砖墙旋转等）
 
 int main()
 {
@@ -1572,40 +1579,40 @@ int main()
             windowArrowSystem->Draw(view, projection, lightPos, camera.Position, finalLightColor);
         }
 
-        // --- 绘制书柜按钮（在书柜上方的墙上） ---
-        {
-            lightingShader.use();
-            lightingShader.setMat4("projection", projection);
-            lightingShader.setMat4("view", view);
-            lightingShader.setVec3("lightPos", lightPos);
-            lightingShader.setVec3("viewPos", camera.Position);
-            lightingShader.setVec3("lightColor", finalLightColor);
-            // 设置台灯点光源
-            glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
-            glm::vec3 lampColor(1.0f, 0.9f, 0.7f);
-            lightingShader.setBool("lampOn", lampOn);
-            lightingShader.setVec3("lampLight.position", lampLightPos);
-            lightingShader.setVec3("lampLight.color", lampColor);
-            lightingShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
-            
-            lightingShader.setVec3("objectColor", 0.8f, 0.2f, 0.2f); // 红色按钮
-            lightingShader.setBool("useTexture", false); // 不使用纹理
-            lightingShader.setBool("isFloor", false);
-            lightingShader.setBool("isHole", false);
-            lightingShader.setBool("excludeBrickSquareRegion", false);
-
-            // 设置模型变换
-            // 按钮位置：在书柜上方，右墙内表面
-            model = glm::mat4(1.0f);
-            model = glm::translate(model, buttonPosition); // 按钮位置（书柜上方）
-            // 不需要旋转，因为顶点已经在YZ平面，法线已经指向-X方向
-            lightingShader.setMat4("model", model);
-
-            // 渲染按钮
-            glBindVertexArray(buttonVAO);
-            glDrawArrays(GL_TRIANGLES, 0, 36); // 6个面，每个面6个顶点
-            glBindVertexArray(0);
-        }
+        // --- 绘制书柜按钮（已注释，改用马的旋转触发） ---
+        // {
+        //     lightingShader.use();
+        //     lightingShader.setMat4("projection", projection);
+        //     lightingShader.setMat4("view", view);
+        //     lightingShader.setVec3("lightPos", lightPos);
+        //     lightingShader.setVec3("viewPos", camera.Position);
+        //     lightingShader.setVec3("lightColor", finalLightColor);
+        //     // 设置台灯点光源
+        //     glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
+        //     glm::vec3 lampColor(1.0f, 0.9f, 0.7f);
+        //     lightingShader.setBool("lampOn", lampOn);
+        //     lightingShader.setVec3("lampLight.position", lampLightPos);
+        //     lightingShader.setVec3("lampLight.color", lampColor);
+        //     lightingShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
+        //     
+        //     lightingShader.setVec3("objectColor", 0.8f, 0.2f, 0.2f); // 红色按钮
+        //     lightingShader.setBool("useTexture", false); // 不使用纹理
+        //     lightingShader.setBool("isFloor", false);
+        //     lightingShader.setBool("isHole", false);
+        //     lightingShader.setBool("excludeBrickSquareRegion", false);
+        //
+        //     // 设置模型变换
+        //     // 按钮位置：在书柜上方，右墙内表面
+        //     model = glm::mat4(1.0f);
+        //     model = glm::translate(model, buttonPosition); // 按钮位置（书柜上方）
+        //     // 不需要旋转，因为顶点已经在YZ平面，法线已经指向-X方向
+        //     lightingShader.setMat4("model", model);
+        //
+        //     // 渲染按钮
+        //     glBindVertexArray(buttonVAO);
+        //     glDrawArrays(GL_TRIANGLES, 0, 36); // 6个面，每个面6个顶点
+        //     glBindVertexArray(0);
+        // }
 
         // // 绘制后墙
         // {
@@ -1767,6 +1774,9 @@ int main()
             horse1RotationX = -90.0f;
             horse2RotationY = -90.0f;
             horse2RotationX = -90.0f;
+            // 同步设置初始旋转角度（用于旋转触发检测）
+            horse1InitialRotationY = horse1RotationY;
+            horse2InitialRotationY = horse2RotationY;
             horsesInitialized = true;
         }
 
@@ -2001,21 +2011,52 @@ int main()
             lastShowOrbEPrompt = false;
         }
         
-        // --- 检测是否靠近书柜按钮并显示E键提示（只在未按下且不在控制马时） ---
-        static bool lastShowButtonEPrompt = false;
-        showButtonEPrompt = false;
-        if (!buttonPressed && !isControllingHorse) {
-            glm::vec3 playerPos = camera.Position;
-            float distanceToButton = glm::length(playerPos - buttonPosition);
-            showButtonEPrompt = distanceToButton < INTERACTION_DISTANCE;
+        // --- 检测是否靠近书柜按钮并显示E键提示（已注释，改用马的旋转触发） ---
+        // static bool lastShowButtonEPrompt = false;
+        // showButtonEPrompt = false;
+        // if (!buttonPressed && !isControllingHorse) {
+        //     glm::vec3 playerPos = camera.Position;
+        //     float distanceToButton = glm::length(playerPos - buttonPosition);
+        //     showButtonEPrompt = distanceToButton < INTERACTION_DISTANCE;
+        //     
+        //     if (showButtonEPrompt) {
+        //         // 确定E字位置（在按钮上方）
+        //         buttonELetterPos = buttonPosition + glm::vec3(0.0f, 0.3f, 0.0f);
+        //     }
+        //     lastShowButtonEPrompt = showButtonEPrompt;
+        // } else {
+        //     lastShowButtonEPrompt = false;
+        // }
+        
+        // --- 检测马的旋转角度，触发动画序列 ---
+        // 计算动画序列是否正在执行（任意一个动画状态为true即表示动画序列正在执行）
+        isAnimationSequenceActive = shelfMoving || shelfMovingBack || brickSquareRotating || brickSquareRotatingBack || (brickSquareRotationProgress >= 1.0f && brickSquareRestTime < BRICK_SQUARE_REST_DURATION);
+        
+        // 只在动画序列未执行时记录旋转角度
+        if (!isAnimationSequenceActive) {
+            // 计算马1从初始角度转过的度数（处理角度环绕）
+            float horse1CurrentRotation = horse1RotationY;
+            float horse1Diff = horse1CurrentRotation - horse1InitialRotationY;
+            // 将角度差归一化到[-180, 180]范围
+            while (horse1Diff > 180.0f) horse1Diff -= 360.0f;
+            while (horse1Diff < -180.0f) horse1Diff += 360.0f;
+            horse1AccumulatedRotation = glm::abs(horse1Diff);
             
-            if (showButtonEPrompt) {
-                // 确定E字位置（在按钮上方）
-                buttonELetterPos = buttonPosition + glm::vec3(0.0f, 0.3f, 0.0f);
+            // 计算马2从初始角度转过的度数（处理角度环绕）
+            float horse2CurrentRotation = horse2RotationY;
+            float horse2Diff = horse2CurrentRotation - horse2InitialRotationY;
+            // 将角度差归一化到[-180, 180]范围
+            while (horse2Diff > 180.0f) horse2Diff -= 360.0f;
+            while (horse2Diff < -180.0f) horse2Diff += 360.0f;
+            horse2AccumulatedRotation = glm::abs(horse2Diff);
+            
+            // 检查两个马的旋转是否都超过阈值
+            if (horse1AccumulatedRotation >= HORSE_ROTATION_THRESHOLD && horse2AccumulatedRotation >= HORSE_ROTATION_THRESHOLD) {
+                // 触发动画序列（与原先按下按钮相同的逻辑）
+                shelfMoving = true;
+                shelfMoveProgress = 0.0f;
+                std::cout << "两只马都旋转超过45度，触发动画序列！书柜开始移动" << std::endl;
             }
-            lastShowButtonEPrompt = showButtonEPrompt;
-        } else {
-            lastShowButtonEPrompt = false;
         }
         
         // --- 更新书柜移动动画 ---
@@ -2045,9 +2086,13 @@ int main()
                 shelfMovingBack = false;
                 shelfMoveProgress = 0.0f;
                 shelfPosition.z = SHELF_INITIAL_Z; // 确保回到初始位置
-                // 书柜反向移动完成后，恢复按钮状态
-                buttonPressed = false;
-                std::cout << "书柜回到原位置，按钮恢复可按状态" << std::endl;
+                // 书柜反向移动完成后，重置马的累计旋转度数
+                horse1AccumulatedRotation = 0.0f;
+                horse2AccumulatedRotation = 0.0f;
+                // 更新初始角度为当前角度，以便重新开始累计
+                horse1InitialRotationY = horse1RotationY;
+                horse2InitialRotationY = horse2RotationY;
+                std::cout << "书柜回到原位置，动画序列结束，重置马的累计旋转度数" << std::endl;
             }
         }
         
@@ -2169,34 +2214,34 @@ int main()
             glDisable(GL_BLEND);
         }
         
-        // --- 渲染按钮的"E"字提示（世界空间，billboard，在HDR FBO中） ---
-        if (showButtonEPrompt && billboardShader) {
-            // 确保在HDR FBO中渲染
-            glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
-            
-            // 启用混合以支持透明度
-            glEnable(GL_BLEND);
-            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-            // 禁用深度测试，确保E字始终显示在最前面
-            glDisable(GL_DEPTH_TEST);
-            
-            billboardShader->use();
-            billboardShader->setMat4("projection", projection);
-            billboardShader->setMat4("view", view);
-            billboardShader->setVec3("textColor", glm::vec3(1.0f, 1.0f, 0.0f)); // 黄色
-            
-            // 设置billboard位置和大小（缩小一些）
-            billboardShader->setVec3("centerPos", buttonELetterPos);
-            billboardShader->setVec2("size", glm::vec2(0.2f, 0.3f)); 
-            
-            glBindVertexArray(eVAO);
-            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-            glBindVertexArray(0);
-            
-            // 恢复状态
-            glEnable(GL_DEPTH_TEST);
-            glDisable(GL_BLEND);
-        }
+        // --- 渲染按钮的"E"字提示（已注释，改用马的旋转触发） ---
+        // if (showButtonEPrompt && billboardShader) {
+        //     // 确保在HDR FBO中渲染
+        //     glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+        //     
+        //     // 启用混合以支持透明度
+        //     glEnable(GL_BLEND);
+        //     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        //     // 禁用深度测试，确保E字始终显示在最前面
+        //     glDisable(GL_DEPTH_TEST);
+        //     
+        //     billboardShader->use();
+        //     billboardShader->setMat4("projection", projection);
+        //     billboardShader->setMat4("view", view);
+        //     billboardShader->setVec3("textColor", glm::vec3(1.0f, 1.0f, 0.0f)); // 黄色
+        //     
+        //     // 设置billboard位置和大小（缩小一些）
+        //     billboardShader->setVec3("centerPos", buttonELetterPos);
+        //     billboardShader->setVec2("size", glm::vec2(0.2f, 0.3f)); 
+        //     
+        //     glBindVertexArray(eVAO);
+        //     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+        //     glBindVertexArray(0);
+        //     
+        //     // 恢复状态
+        //     glEnable(GL_DEPTH_TEST);
+        //     glDisable(GL_BLEND);
+        // }
         
         // 提取超过亮度阈值的区域
         glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[0]);
@@ -2418,18 +2463,18 @@ void processInput(GLFWwindow* window)
                 std::cout << "进入控制模式 - 马雕像2" << std::endl;
             } else {
                 // 只有在不靠近马雕像的情况下，才检查其他交互
-                // 优先检查按钮交互
-                if (!buttonPressed) {
-                    float distanceToButton = glm::length(playerPos - buttonPosition);
-                    if (distanceToButton < INTERACTION_DISTANCE) {
-                        // 按下按钮，触发书柜移动
-                        buttonPressed = true;
-                        shelfMoving = true;
-                        shelfMoveProgress = 0.0f;
-                        std::cout << "按下按钮，书柜开始向左移动" << std::endl;
-                    }
-                }
-                // 然后检查是否拾取灵珠
+                // 按钮交互已注释，改用马的旋转触发
+                // if (!buttonPressed) {
+                //     float distanceToButton = glm::length(playerPos - buttonPosition);
+                //     if (distanceToButton < INTERACTION_DISTANCE) {
+                //         // 按下按钮，触发书柜移动
+                //         buttonPressed = true;
+                //         shelfMoving = true;
+                //         shelfMoveProgress = 0.0f;
+                //         std::cout << "按下按钮，书柜开始向左移动" << std::endl;
+                //     }
+                // }
+                // 检查是否拾取灵珠
                 if (!orbPicked && isFloorTileLifting && floorLiftProgress > 0.0f) {
                     glm::vec3 orbPos = glm::vec3(g_tileWorldCenterX, g_holeCenterY, g_tileWorldCenterZ);
                     float distanceToOrb = glm::length(playerPos - orbPos);

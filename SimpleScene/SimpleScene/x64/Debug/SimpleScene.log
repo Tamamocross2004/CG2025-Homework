@@ -9,31 +9,5 @@ D:\code\OpenGL\Project\Homework1\SimpleScene\model.h(1,1): warning C4819: 该文
 D:\code\OpenGL\Project\Homework1\SimpleScene\mesh.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
   (编译源文件“arrow_system.cpp”)
   
-  main.cpp
-D:\code\OpenGL\Project\Homework1\SimpleScene\model.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“main.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\mesh.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“main.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\sandbox_mesh.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“main.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\particle_system.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“main.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\lightning.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“main.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\arrow_system.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“main.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(879,26): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(884,31): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(923,42): warning C4267: “=”: 从“size_t”转换到“unsigned int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1082,27): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1086,33): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1657,51): warning C4305: “参数”: 从“double”到“float”截断
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(2218,36): warning C4018: “<”: 有符号/无符号不匹配
-  正在生成代码...
+LINK : warning LNK4098: 默认库“MSVCRT”与其他库的使用冲突；请使用 /NODEFAULTLIB:library
   SimpleScene.vcxproj -> D:\code\OpenGL\Project\Homework1\SimpleScene\x64\Debug\SimpleScene.exe

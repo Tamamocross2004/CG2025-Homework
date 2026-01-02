@@ -119,6 +119,15 @@ void ArrowSystem::Update(float dt) {
             // 更新生命周期
             arrow.life -= dt;
             
+            // 碰撞检测：左墙（x负半轴）
+            // 左墙中心在x=-4.0，厚度0.1，内表面在x=-3.95左右
+            // 检测箭矢是否碰到左墙内表面（使用稍微宽松的阈值-3.9，确保能检测到碰撞）
+            const float LEFT_WALL_X = -3.9f;  // 左墙内表面x坐标阈值
+            if (arrow.position.x <= LEFT_WALL_X) {
+                arrow.active = false;
+                continue;  // 箭矢已消失，跳过后续检测
+            }
+            
             // 如果生命周期结束或超出房间范围，停用箭头
             if (arrow.life <= 0.0f || 
                 arrow.position.x < -5.0f || arrow.position.x > 5.0f ||
