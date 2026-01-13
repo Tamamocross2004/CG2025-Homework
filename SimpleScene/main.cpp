@@ -30,7 +30,9 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 bool rayHitLamp(const glm::vec3& rayOrigin, const glm::vec3& rayDir); // 射线检测函数，判断是否击中台灯
 bool isNearHorse(const glm::vec3& playerPos, const glm::vec3& horsePos, float threshold); // 检查玩家是否靠近马雕像
 glm::vec3 clampToRoomBounds(const glm::vec3& position); // 限制位置在房间范围内
-bool areHorsesAtZAxisEnd(); // 检查两个马是否都在z轴尽头
+bool areHorsesAtZAxisEnd(); // 检查两个马是否都在z轴尽头（已弃用，改用isHorse1OnTile1和isHorse2OnTile2）
+bool isHorse1OnTile1(); // 检查马1是否在地砖1范围内
+bool isHorse2OnTile2(); // 检查马2是否在地砖2范围内
 
 // 马雕像控制状态
 bool isControllingHorse = false; // 是否正在控制马雕像
@@ -100,6 +102,27 @@ float floorLiftSpeed = 0.5f;          // 翘起速度
 const float Z_AXIS_THRESHOLD = 3.0f; // z轴触发阈值（房间z范围是-3.5到3.5，-3.0接近尽头）
 unsigned int liftedTileVAO, liftedTileVBO; // 翘起地板块的VAO/VBO
 unsigned int liftedTileHoleVAO, liftedTileHoleVBO; // 无盖长方体（洞）的VAO/VBO
+// 地砖触发相关变量（z轴尽头）
+const float BRICK_TILE_SIZE = 1.5f;        // 地砖大小（1.5x1.5，确保比马的底座大）
+const float BRICK_TILE_GAP = 0.5f;         // 两块地砖之间的间距
+const float BRICK_TILE_Z = 3.0f;           // 地砖的z坐标（接近z轴尽头3.5）
+const float BRICK_TILE_Y = -2.92f;         // 地砖的y坐标（与地板顶部对齐）
+// 地砖1位置（左侧，对应马1）：x中心=-2.0
+const float BRICK_TILE1_CENTER_X = -2.0f;
+const float BRICK_TILE1_MIN_X = BRICK_TILE1_CENTER_X - BRICK_TILE_SIZE * 0.5f;  // -3.0
+const float BRICK_TILE1_MAX_X = BRICK_TILE1_CENTER_X + BRICK_TILE_SIZE * 0.5f;  // -1.0
+const float BRICK_TILE1_MIN_Z = BRICK_TILE_Z - BRICK_TILE_SIZE * 0.5f;          // 2.0
+const float BRICK_TILE1_MAX_Z = BRICK_TILE_Z + BRICK_TILE_SIZE * 0.5f;          // 4.0
+// 地砖2位置（右侧，对应马2）：x中心=2.0
+const float BRICK_TILE2_CENTER_X = 2.0f;
+const float BRICK_TILE2_MIN_X = BRICK_TILE2_CENTER_X - BRICK_TILE_SIZE * 0.5f;  // 1.0
+const float BRICK_TILE2_MAX_X = BRICK_TILE2_CENTER_X + BRICK_TILE_SIZE * 0.5f;  // 3.0
+const float BRICK_TILE2_MIN_Z = BRICK_TILE_Z - BRICK_TILE_SIZE * 0.5f;          // 2.0
+const float BRICK_TILE2_MAX_Z = BRICK_TILE_Z + BRICK_TILE_SIZE * 0.5f;          // 4.0
+unsigned int brickTile1VAO, brickTile1VBO; // 地砖1的VAO/VBO
+unsigned int brickTile2VAO, brickTile2VBO; // 地砖2的VAO/VBO
+bool isHorse1OnTile1(); // 检查马1是否在地砖1范围内
+bool isHorse2OnTile2(); // 检查马2是否在地砖2范围内
 
 // 灵珠拾取相关变量
 bool orbPicked = false;               // 灵珠是否已被拾取
@@ -206,10 +229,10 @@ int main()
     } catch (...) {
         std::cout << "ERROR: Failed to load bloom shaders!" << std::endl;
     }
-    // 文字显示着色器（屏幕空间，已弃用）
+    // 文字显示着色器（屏幕空间，使用纹理显示中文）
     Shader* textDisplayShader = nullptr;
     try {
-        textDisplayShader = new Shader("text_display.vs", "text_display.fs");
+        textDisplayShader = new Shader("text_display_texture.vs", "text_display_texture.fs");
     } catch (...) {
         std::cout << "ERROR: Failed to load text display shader!" << std::endl;
     }
@@ -417,6 +440,61 @@ int main()
     }
     stbi_image_free(brickData);
 
+    // --- 加载砖墙纹理（用于z轴尽头的地砖） ---
+    unsigned int brickWallTexture;
+    glGenTextures(1, &brickWallTexture);
+    glBindTexture(GL_TEXTURE_2D, brickWallTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int brickWallWidth, brickWallHeight, brickWallNrChannels;
+    unsigned char *brickWallData = stbi_load("resource/brick_wall_10_4k.blend/textures/brick_wall_10_diff_4k.jpg", &brickWallWidth, &brickWallHeight, &brickWallNrChannels, 0);
+    if (brickWallData)
+    {
+        GLenum format = GL_RGB;
+        if (brickWallNrChannels == 1)
+            format = GL_RED;
+        else if (brickWallNrChannels == 3)
+            format = GL_RGB;
+        else if (brickWallNrChannels == 4)
+            format = GL_RGBA;
+        
+        glTexImage2D(GL_TEXTURE_2D, 0, format, brickWallWidth, brickWallHeight, 0, format, GL_UNSIGNED_BYTE, brickWallData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        std::cout << "Loaded brick wall texture successfully" << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to load brick wall texture" << std::endl;
+    }
+    stbi_image_free(brickWallData);
+
+    // --- 加载中文消息纹理（用于显示"已拾取灵珠！"） ---
+    unsigned int messageTexture;
+    glGenTextures(1, &messageTexture);
+    glBindTexture(GL_TEXTURE_2D, messageTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int messageWidth, messageHeight, messageNrChannels;
+    // 注意：需要创建一个包含"已拾取灵珠！"文字的PNG图片，放在resource/textures/目录下
+    // 图片应该是透明背景，白色或黄色文字，建议尺寸：600x150像素
+    unsigned char *messageData = stbi_load("resource/textures/orb_pickup_message.png", &messageWidth, &messageHeight, &messageNrChannels, 4);
+    if (messageData)
+    {
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, messageWidth, messageHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, messageData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        std::cout << "Loaded message texture successfully" << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to load message texture: resource/textures/orb_pickup_message.png" << std::endl;
+        std::cout << "Please create a PNG image with Chinese text '已拾取灵珠！' (transparent background, white/yellow text)" << std::endl;
+    }
+    stbi_image_free(messageData);
+
     // --- 加载云纹理 ---
     unsigned int cloudTexture;
     glGenTextures(1, &cloudTexture);
@@ -590,6 +668,93 @@ int main()
     glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
     // 纹理坐标属性
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
+
+    // --- 创建z轴尽头的地砖几何体（两块地砖，用于触发检测） ---
+    // 地砖大小：2.0 x 2.0，厚度0.15（与地板相同）
+    // 地砖1：左侧，中心x=-2.0, z=3.0
+    // 地砖2：右侧，中心x=2.0, z=3.0
+    // 两块地砖之间有间距（0.5单位）
+    float brickTileHalfSize = BRICK_TILE_SIZE * 0.5f;  // 1.0
+    float brickTileHalfHeight = 0.075f;  // 0.15/2
+    
+    // 地砖顶点数据（与地板相同结构：位置(3) + 法线(3) + 纹理坐标(2) = 8个float）
+    float brickTileVertices[] = {
+        // 顶部面（向上）
+        -brickTileHalfSize, brickTileHalfHeight, -brickTileHalfSize,  0.0f,  1.0f, 0.0f,  0.0f, 0.0f,
+         brickTileHalfSize, brickTileHalfHeight, -brickTileHalfSize,  0.0f,  1.0f, 0.0f,  1.0f, 0.0f,
+         brickTileHalfSize, brickTileHalfHeight,  brickTileHalfSize,  0.0f,  1.0f, 0.0f,  1.0f, 1.0f,
+         brickTileHalfSize, brickTileHalfHeight,  brickTileHalfSize,  0.0f,  1.0f, 0.0f,  1.0f, 1.0f,
+        -brickTileHalfSize, brickTileHalfHeight,  brickTileHalfSize,  0.0f,  1.0f, 0.0f,  0.0f, 1.0f,
+        -brickTileHalfSize, brickTileHalfHeight, -brickTileHalfSize,  0.0f,  1.0f, 0.0f,  0.0f, 0.0f,
+        
+        // 底部面（向下）
+        -brickTileHalfSize, -brickTileHalfHeight, -brickTileHalfSize,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+         brickTileHalfSize, -brickTileHalfHeight, -brickTileHalfSize,  0.0f, -1.0f, 0.0f,  1.0f, 0.0f,
+         brickTileHalfSize, -brickTileHalfHeight,  brickTileHalfSize,  0.0f, -1.0f, 0.0f,  1.0f, 1.0f,
+         brickTileHalfSize, -brickTileHalfHeight,  brickTileHalfSize,  0.0f, -1.0f, 0.0f,  1.0f, 1.0f,
+        -brickTileHalfSize, -brickTileHalfHeight,  brickTileHalfSize,  0.0f, -1.0f, 0.0f,  0.0f, 1.0f,
+        -brickTileHalfSize, -brickTileHalfHeight, -brickTileHalfSize,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+        
+        // 前面（+Z方向）
+        -brickTileHalfSize, -brickTileHalfHeight, brickTileHalfSize,  0.0f,  0.0f,  1.0f,  0.0f, 0.0f,
+         brickTileHalfSize, -brickTileHalfHeight, brickTileHalfSize,  0.0f,  0.0f,  1.0f,  1.0f, 0.0f,
+         brickTileHalfSize,  brickTileHalfHeight, brickTileHalfSize,  0.0f,  0.0f,  1.0f,  1.0f, 1.0f,
+         brickTileHalfSize,  brickTileHalfHeight, brickTileHalfSize,  0.0f,  0.0f,  1.0f,  1.0f, 1.0f,
+        -brickTileHalfSize,  brickTileHalfHeight, brickTileHalfSize,  0.0f,  0.0f,  1.0f,  0.0f, 1.0f,
+        -brickTileHalfSize, -brickTileHalfHeight, brickTileHalfSize,  0.0f,  0.0f,  1.0f,  0.0f, 0.0f,
+        
+        // 后面（-Z方向）
+        -brickTileHalfSize, -brickTileHalfHeight, -brickTileHalfSize,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+         brickTileHalfSize, -brickTileHalfHeight, -brickTileHalfSize,  0.0f,  0.0f, -1.0f,  1.0f, 0.0f,
+         brickTileHalfSize,  brickTileHalfHeight, -brickTileHalfSize,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+         brickTileHalfSize,  brickTileHalfHeight, -brickTileHalfSize,  0.0f,  0.0f, -1.0f,  1.0f, 1.0f,
+        -brickTileHalfSize,  brickTileHalfHeight, -brickTileHalfSize,  0.0f,  0.0f, -1.0f,  0.0f, 1.0f,
+        -brickTileHalfSize, -brickTileHalfHeight, -brickTileHalfSize,  0.0f,  0.0f, -1.0f,  0.0f, 0.0f,
+        
+        // 右面（+X方向）
+         brickTileHalfSize, -brickTileHalfHeight, -brickTileHalfSize,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+         brickTileHalfSize, -brickTileHalfHeight,  brickTileHalfSize,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+         brickTileHalfSize,  brickTileHalfHeight,  brickTileHalfSize,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+         brickTileHalfSize,  brickTileHalfHeight,  brickTileHalfSize,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+         brickTileHalfSize,  brickTileHalfHeight, -brickTileHalfSize,  1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+         brickTileHalfSize, -brickTileHalfHeight, -brickTileHalfSize,  1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+        
+        // 左面（-X方向）
+        -brickTileHalfSize, -brickTileHalfHeight, -brickTileHalfSize, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f,
+        -brickTileHalfSize, -brickTileHalfHeight,  brickTileHalfSize, -1.0f,  0.0f,  0.0f,  1.0f, 0.0f,
+        -brickTileHalfSize,  brickTileHalfHeight,  brickTileHalfSize, -1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+        -brickTileHalfSize,  brickTileHalfHeight,  brickTileHalfSize, -1.0f,  0.0f,  0.0f,  1.0f, 1.0f,
+        -brickTileHalfSize,  brickTileHalfHeight, -brickTileHalfSize, -1.0f,  0.0f,  0.0f,  0.0f, 1.0f,
+        -brickTileHalfSize, -brickTileHalfHeight, -brickTileHalfSize, -1.0f,  0.0f,  0.0f,  0.0f, 0.0f
+    };
+    
+    // 创建地砖1的VAO/VBO
+    glGenVertexArrays(1, &brickTile1VAO);
+    glGenBuffers(1, &brickTile1VBO);
+    glBindVertexArray(brickTile1VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, brickTile1VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(brickTileVertices), brickTileVertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
+    
+    // 创建地砖2的VAO/VBO（使用相同的数据）
+    glGenVertexArrays(1, &brickTile2VAO);
+    glGenBuffers(1, &brickTile2VBO);
+    glBindVertexArray(brickTile2VAO);
+    glBindBuffer(GL_ARRAY_BUFFER, brickTile2VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(brickTileVertices), brickTileVertices, GL_STATIC_DRAW);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
     glEnableVertexAttribArray(2);
     glBindVertexArray(0);
@@ -1001,18 +1166,19 @@ int main()
     glBindVertexArray(0);
 
     // --- 创建屏幕空间消息显示的quad（用于显示"已拾取灵珠！"） ---
-    // 屏幕空间坐标（像素坐标）
+    // 屏幕空间坐标（像素坐标）+ 纹理坐标
     float messageQuadWidth = 600.0f;  // 消息框宽度（放大）
-    float messageQuadHeight = 150.0f; // 消息框高度（放大）
+    float messageQuadHeight = 300.0f; // 消息框高度（放大）
     float centerX = SCR_WIDTH / 2.0f;
     float centerY = SCR_HEIGHT / 2.0f;
     
+    // 顶点数据：位置(2) + 纹理坐标(2) = 4个float
     float messageQuadVertices[] = {
-        // 屏幕空间坐标（像素坐标）
-        centerX - messageQuadWidth / 2.0f, centerY - messageQuadHeight / 2.0f,  // 左下
-        centerX + messageQuadWidth / 2.0f, centerY - messageQuadHeight / 2.0f,  // 右下
-        centerX + messageQuadWidth / 2.0f, centerY + messageQuadHeight / 2.0f,  // 右上
-        centerX - messageQuadWidth / 2.0f, centerY + messageQuadHeight / 2.0f   // 左上
+        // 屏幕空间坐标（像素坐标）    // 纹理坐标
+        centerX - messageQuadWidth / 2.0f, centerY - messageQuadHeight / 2.0f,  0.0f, 0.0f,  // 左下
+        centerX + messageQuadWidth / 2.0f, centerY - messageQuadHeight / 2.0f,  1.0f, 0.0f,  // 右下
+        centerX + messageQuadWidth / 2.0f, centerY + messageQuadHeight / 2.0f,  1.0f, 1.0f,  // 右上
+        centerX - messageQuadWidth / 2.0f, centerY + messageQuadHeight / 2.0f,  0.0f, 1.0f   // 左上
     };
     
     unsigned int messageQuadIndices[] = {
@@ -1029,8 +1195,12 @@ int main()
     glBufferData(GL_ARRAY_BUFFER, sizeof(messageQuadVertices), messageQuadVertices, GL_STATIC_DRAW);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, messageQuadEBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(messageQuadIndices), messageQuadIndices, GL_STATIC_DRAW);
+    // 位置属性
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 2 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
+    // 纹理坐标属性
+    glEnableVertexAttribArray(1);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
     glBindVertexArray(0);
 
     // 统一房间用的顶点信息(每一个前面三个值为顶点坐标，中间三个值为法线向量，最后两个值为纹理坐标)
@@ -1229,8 +1399,8 @@ int main()
             lightning->Update(deltaTime, isRaining, sandbox_heightmap);
         }
 
-        // 检测两个马是否都在z轴尽头，触发地板翘起
-        if (areHorsesAtZAxisEnd()) {
+        // 检测两个马是否都在对应的地砖范围内，触发地板翘起
+        if (isHorse1OnTile1() && isHorse2OnTile2()) {
             if (!isFloorTileLifting) {
                 isFloorTileLifting = true;
                 std::cout << "触发地板翘起效果！" << std::endl;
@@ -1367,6 +1537,15 @@ int main()
             } else {
                 lightingShader.setBool("excludeLiftedTileRegion", false);
             }
+            
+            // 排除地砖区域（z轴尽头的两块地砖）
+            lightingShader.setBool("excludeBrickTileRegion", true);
+            // 地砖1区域：X: -3.0 到 -1.0, Z: 2.0 到 4.0
+            lightingShader.setVec2("brickTile1RegionMin", glm::vec2(BRICK_TILE1_MIN_X, BRICK_TILE1_MIN_Z));
+            lightingShader.setVec2("brickTile1RegionMax", glm::vec2(BRICK_TILE1_MAX_X, BRICK_TILE1_MAX_Z));
+            // 地砖2区域：X: 1.0 到 3.0, Z: 2.0 到 4.0
+            lightingShader.setVec2("brickTile2RegionMin", glm::vec2(BRICK_TILE2_MIN_X, BRICK_TILE2_MIN_Z));
+            lightingShader.setVec2("brickTile2RegionMax", glm::vec2(BRICK_TILE2_MAX_X, BRICK_TILE2_MAX_Z));
 
             // 绑定地砖纹理
             glActiveTexture(GL_TEXTURE0);
@@ -1395,6 +1574,7 @@ int main()
             lightingShader.setBool("isHole", false); // 不是无盖长方体
             lightingShader.setBool("excludeBrickSquareRegion", false); // 不是右墙，不需要排除砖墙区域
             lightingShader.setBool("excludeLiftedTileRegion", false); // 翘起地板块本身不需要排除
+            lightingShader.setBool("excludeBrickTileRegion", false); // 翘起地板块不需要排除地砖区域
 
             // 绑定地砖纹理
             glActiveTexture(GL_TEXTURE0);
@@ -1440,6 +1620,7 @@ int main()
             lightingShader.setBool("isHole", true); // 标识这是无盖长方体（洞）
             lightingShader.setBool("excludeBrickSquareRegion", false); // 不是右墙，不需要排除砖墙区域
             lightingShader.setBool("excludeLiftedTileRegion", false);
+            lightingShader.setBool("excludeBrickTileRegion", false); // 无盖长方体不需要排除地砖区域
 
             // 绑定地板纹理
             glActiveTexture(GL_TEXTURE0);
@@ -1454,6 +1635,40 @@ int main()
             // 渲染无盖长方体（5个面，30个顶点）
             glBindVertexArray(liftedTileHoleVAO);
             glDrawArrays(GL_TRIANGLES, 0, 30);
+            glBindVertexArray(0);
+        }
+
+        // --- 绘制z轴尽头的地砖（两块） ---
+        {
+            lightingShader.use();
+            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
+            lightingShader.setBool("useTexture", true);
+            lightingShader.setBool("isFloor", true);
+            lightingShader.setBool("isLiftedTile", false);
+            lightingShader.setBool("isHole", false);
+            lightingShader.setBool("excludeBrickSquareRegion", false);
+            lightingShader.setBool("excludeLiftedTileRegion", false);
+            lightingShader.setBool("excludeBrickTileRegion", false); // 地砖本身不需要排除
+            
+            // 绑定砖墙纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, brickWallTexture);
+            lightingShader.setInt("floorTexture", 0);
+            
+            // 绘制地砖1（左侧，对应马1）
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(BRICK_TILE1_CENTER_X, BRICK_TILE_Y, BRICK_TILE_Z));
+            lightingShader.setMat4("model", model);
+            glBindVertexArray(brickTile1VAO);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+            
+            // 绘制地砖2（右侧，对应马2）
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, glm::vec3(BRICK_TILE2_CENTER_X, BRICK_TILE_Y, BRICK_TILE_Z));
+            lightingShader.setMat4("model", model);
+            glBindVertexArray(brickTile2VAO);
+            glDrawArrays(GL_TRIANGLES, 0, 36);
+            
             glBindVertexArray(0);
         }
 
@@ -2308,7 +2523,6 @@ int main()
             
             textDisplayShader->use();
             textDisplayShader->setVec2("screenSize", glm::vec2(SCR_WIDTH, SCR_HEIGHT));
-            textDisplayShader->setVec3("textColor", glm::vec3(1.0f, 1.0f, 0.0f)); // 黄色
             // 根据剩余时间计算透明度（淡入淡出效果）
             float fadeTime = 0.5f; // 淡入淡出时间（秒）
             float alpha = 1.0f;
@@ -2318,6 +2532,11 @@ int main()
                 alpha = (ORB_PICKUP_MESSAGE_DURATION - orbPickupMessageTime) / fadeTime; // 淡出
             }
             textDisplayShader->setFloat("alpha", alpha * 0.9f); // 稍微透明
+            
+            // 绑定消息纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, messageTexture);
+            textDisplayShader->setInt("textTexture", 0);
             
             glBindVertexArray(messageQuadVAO);
             glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -2346,6 +2565,8 @@ int main()
     glDeleteVertexArrays(1, &liftedTileHoleVAO);
     glDeleteVertexArrays(1, &brickSquareVAO);
     glDeleteVertexArrays(1, &buttonVAO);
+    glDeleteVertexArrays(1, &brickTile1VAO);
+    glDeleteVertexArrays(1, &brickTile2VAO);
     
     glDeleteBuffers(1, &roomVBO);
     glDeleteBuffers(1, &windowVBO);
@@ -2357,10 +2578,14 @@ int main()
     glDeleteBuffers(1, &liftedTileHoleVBO);
     glDeleteBuffers(1, &brickSquareVBO);
     glDeleteBuffers(1, &buttonVBO);
+    glDeleteBuffers(1, &brickTile1VBO);
+    glDeleteBuffers(1, &brickTile2VBO);
     
     glDeleteTextures(1, &floorTexture);
     glDeleteTextures(1, &woodTexture);
     glDeleteTextures(1, &brickTexture);
+    glDeleteTextures(1, &brickWallTexture);
+    glDeleteTextures(1, &messageTexture);
 
     // 清理 Bloom 资源
     glDeleteFramebuffers(1, &hdrFBO);
@@ -2726,6 +2951,28 @@ glm::vec3 clampToRoomBounds(const glm::vec3& position)
 bool areHorsesAtZAxisEnd()
 {
     return (horse1Position.z >= Z_AXIS_THRESHOLD && horse2Position.z >= Z_AXIS_THRESHOLD);
+}
+
+// 检查马1是否在地砖1范围内
+bool isHorse1OnTile1()
+{
+    // std::cout << "马1已到位!" << std::endl;
+    // 马的scale是10.0f，假设马的底座大约是1.0-1.5单位
+    // 地砖大小是2.0x2.0，足够大
+    // 检查马的位置是否在地砖范围内
+    return (horse1Position.x >= BRICK_TILE1_MIN_X && horse1Position.x <= BRICK_TILE1_MAX_X &&
+            horse1Position.z >= BRICK_TILE1_MIN_Z && horse1Position.z <= BRICK_TILE1_MAX_Z);
+}
+
+// 检查马2是否在地砖2范围内
+bool isHorse2OnTile2()
+{
+    // std::cout << "马2已到位!" << std::endl;
+    // 马的scale是10.0f，假设马的底座大约是1.0-1.5单位
+    // 地砖大小是2.0x2.0，足够大
+    // 检查马的位置是否在地砖范围内
+    return (horse2Position.x >= BRICK_TILE2_MIN_X && horse2Position.x <= BRICK_TILE2_MAX_X &&
+            horse2Position.z >= BRICK_TILE2_MIN_Z && horse2Position.z <= BRICK_TILE2_MAX_Z);
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called

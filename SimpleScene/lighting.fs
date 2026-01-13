@@ -42,6 +42,13 @@ uniform bool isBrickSquare;            // 是否是砖墙正方形（如果是�
 uniform vec2 brickSquareRegionMin;     // 砖墙区域最小边界 (y, z)
 uniform vec2 brickSquareRegionMax;     // 砖墙区域最大边界 (y, z)
 
+// 地砖区域排除（用于主地板，排除z轴尽头的地砖）
+uniform bool excludeBrickTileRegion;   // 是否排除地砖区域（只用于主地板）
+uniform vec2 brickTile1RegionMin;      // 地砖1区域最小边界 (x, z)
+uniform vec2 brickTile1RegionMax;      // 地砖1区域最大边界 (x, z)
+uniform vec2 brickTile2RegionMin;      // 地砖2区域最小边界 (x, z)
+uniform vec2 brickTile2RegionMax;      // 地砖2区域最大边界 (x, z)
+
 void main()
 {
     // 如果是主地板（不是翘起地板块）且需要排除翘起区域，检查当前片段是否在翘起区域内
@@ -63,6 +70,21 @@ void main()
                 fragYZ.y >= brickSquareRegionMin.y && fragYZ.y <= brickSquareRegionMax.y) {
                 discard; // 丢弃这个片段，不渲染
             }
+        }
+    }
+    
+    // 如果是主地板且需要排除地砖区域，检查当前片段是否在地砖区域内
+    if (isFloor && excludeBrickTileRegion && !isLiftedTile) {
+        vec2 fragXZ = FragPos.xz;
+        // 检查是否在地砖1范围内
+        if (fragXZ.x >= brickTile1RegionMin.x && fragXZ.x <= brickTile1RegionMax.x &&
+            fragXZ.y >= brickTile1RegionMin.y && fragXZ.y <= brickTile1RegionMax.y) {
+            discard; // 丢弃这个片段，不渲染
+        }
+        // 检查是否在地砖2范围内
+        if (fragXZ.x >= brickTile2RegionMin.x && fragXZ.x <= brickTile2RegionMax.x &&
+            fragXZ.y >= brickTile2RegionMin.y && fragXZ.y <= brickTile2RegionMax.y) {
+            discard; // 丢弃这个片段，不渲染
         }
     }
     
