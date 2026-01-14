@@ -21,6 +21,7 @@ ArrowSystem::ArrowSystem(Model* arrowModel, Shader* shader, const glm::vec3& spa
     for (auto& arrow : arrows) {
         arrow.active = false;
         arrow.life = 0.0f;
+        arrow.stuck = false;
     }
     
     std::cout << "ArrowSystem created at position: (" 
@@ -50,9 +51,9 @@ void ArrowSystem::resetArrow(Arrow& arrow) {
     // 速度方向：主要朝向spawnDirection（x轴负方向），添加一些随机性
     glm::vec3 baseDir = spawnDirection;  // 已经是(-1, 0, 0)，即x轴负方向
     glm::vec3 randomDir = glm::normalize(glm::vec3(
-        glm::linearRand(-0.1f, 0.1f),   // x方向随机性较小，保持主要朝向x轴负方向
-        glm::linearRand(-0.1f, 0.2f),   // 稍微向上
-        glm::linearRand(-0.2f, 0.2f)    // z方向可以有一些随机性
+        glm::linearRand(-0.5f, 0.5f),   // x方向随机
+        glm::linearRand(-0.5f, 0.5f),   // y方向随机
+        glm::linearRand(-0.2f, 0.2f)    // z方向随机
     ));
     arrow.velocity = glm::normalize(baseDir + randomDir * 0.2f) * arrowSpeed;  // 减少随机性
     
@@ -71,6 +72,7 @@ void ArrowSystem::resetArrow(Arrow& arrow) {
     
     arrow.life = arrowLifetime;
     arrow.active = true;
+    arrow.stuck = false;
 }
 
 void ArrowSystem::Update(float dt) {
@@ -113,6 +115,15 @@ void ArrowSystem::Update(float dt) {
     // 更新所有激活的箭头
     for (auto& arrow : arrows) {
         if (arrow.active) {
+            // 如果箭矢已经插在表面上，跳过更新
+            if (arrow.stuck) {
+                continue;
+            }
+            
+            // 应用重力效果（重力加速度，负值表示向下）
+            const float gravity = -5.0f;  // 重力加速度（可根据需要调整）
+            arrow.velocity.y += gravity * dt;
+            
             // 更新位置
             arrow.position += arrow.velocity * dt;
             
@@ -120,19 +131,48 @@ void ArrowSystem::Update(float dt) {
             arrow.life -= dt;
             
             // 碰撞检测：左墙（x负半轴）
-            // 左墙中心在x=-4.0，厚度0.1，内表面在x=-3.95左右
-            // 检测箭矢是否碰到左墙内表面（使用稍微宽松的阈值-3.9，确保能检测到碰撞）
             const float LEFT_WALL_X = -3.9f;  // 左墙内表面x坐标阈值
             if (arrow.position.x <= LEFT_WALL_X) {
+                arrow.stuck = true;
+                arrow.velocity = glm::vec3(0.0f);  // 停止移动
+                continue;  // 箭矢已插在墙上，跳过后续检测
+            }
+            
+            // 碰撞检测：右墙（x正半轴）
+            const float RIGHT_WALL_X = 3.9f;  // 右墙内表面x坐标阈值
+            if (arrow.position.x >= RIGHT_WALL_X) {
+                arrow.stuck = true;
+                arrow.velocity = glm::vec3(0.0f);  // 停止移动
+                continue;
+            }
+            
+            // 碰撞检测：地板（y负半轴）
+            const float FLOOR_Y = -2.85f;  // 地板顶部Y坐标（地板在y=-2.5，厚度约0.15，顶部在-2.85）
+            if (arrow.position.y <= FLOOR_Y) {
+                arrow.stuck = true;
+                arrow.velocity = glm::vec3(0.0f);  // 停止移动
+                arrow.position.y = FLOOR_Y;  // 固定在 floor 表面
+                continue;
+            }
+            
+            // 碰撞检测：天花板（y正半轴）
+            const float CEILING_Y = 2.95f;  // 天花板底部Y坐标
+            if (arrow.position.y >= CEILING_Y) {
+                arrow.stuck = true;
+                arrow.velocity = glm::vec3(0.0f);  // 停止移动
+                continue;
+            }
+            
+            // 如果超过房间z轴尽头，直接消失
+            if (arrow.position.z > 3.5f) {
                 arrow.active = false;
-                continue;  // 箭矢已消失，跳过后续检测
+                continue;
             }
             
             // 如果生命周期结束或超出房间范围，停用箭头
             if (arrow.life <= 0.0f || 
                 arrow.position.x < -5.0f || arrow.position.x > 5.0f ||
-                arrow.position.y < -5.0f || arrow.position.y > 5.0f ||
-                arrow.position.z < -5.0f || arrow.position.z > 5.0f) {
+                arrow.position.y < -5.0f || arrow.position.y > 5.0f) {
                 arrow.active = false;
             }
         }
@@ -161,8 +201,6 @@ void ArrowSystem::Draw(const glm::mat4& view, const glm::mat4& projection,
     arrowShader->setVec3("light.specular", lightColor * 0.2f);
     
     // 设置台灯点光源（与模型渲染保持一致）
-    // 注意：这里需要从外部传入lampLightPos，暂时设为默认值
-    // 如果需要台灯光照，可以在main.cpp中调用时传入
     arrowShader->setBool("lampOn", false); // 箭头不受台灯影响，或可以从外部传入
     arrowShader->setBool("isLampModel", false);
     
@@ -172,13 +210,7 @@ void ArrowSystem::Draw(const glm::mat4& view, const glm::mat4& projection,
         if (arrow.active) {
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, arrow.position);
-            
-            // 如果箭头现在朝向y轴负方向，需要旋转使其朝向x轴负方向
-            // 从y轴负方向(0,-1,0)到x轴负方向(-1,0,0)的旋转：
-            // 方法1：先绕z轴旋转90度（y负->x正），然后绕y轴旋转180度（x正->x负）
-            // 但这样箭头会垂直，需要先让箭头水平
-            // 方法2：先绕x轴旋转90度（y负->z正），然后绕y轴旋转90度（z正->x负）
-            
+                       
             // 应用旋转偏移（用于调整不同方向箭头的模型朝向）
             // 使用成员变量中的旋转偏移量，允许不同箭头系统有不同的旋转
             model = glm::rotate(model, glm::radians(rotationOffsetX), glm::vec3(1.0f, 0.0f, 0.0f));  
@@ -216,11 +248,11 @@ void ArrowSystem::Draw(const glm::mat4& view, const glm::mat4& projection,
         }
     }
     
-    // 调试输出（每60帧输出一次）
-    static int drawFrameCount = 0;
-    if (++drawFrameCount % 60 == 0 && drawnCount > 0) {
-        std::cout << "Drawing " << drawnCount << " arrows" << std::endl;
-    }
+    // // 调试输出（每60帧输出一次）
+    // static int drawFrameCount = 0;
+    // if (++drawFrameCount % 60 == 0 && drawnCount > 0) {
+    //     std::cout << "Drawing " << drawnCount << " arrows" << std::endl;
+    // }
 }
 
 void ArrowSystem::StartShooting() {

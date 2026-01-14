@@ -13,6 +13,7 @@ struct Arrow {
     float life;           // 生命周期（秒）
     float rotationY;       // Y轴旋转角度
     bool active;          // 是否激活
+    bool stuck;           // 是否插在表面上（碰撞后停止移动但继续渲染）
 };
 
 // 箭头系统类

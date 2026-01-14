@@ -50,7 +50,7 @@ void ParticleSystem::resetParticle(Particle& particle, const glm::vec3& cloudCen
         particle.velocity = glm::vec3(0.0f, -1.0f, 0.0f); 
     } else {
         // 雨滴：初始速度较快，且受重力影响大
-        float gravity = 9.8f;
+        float gravity = 12.8f;
         particle.velocity = glm::vec3(0.0f, -gravity * glm::linearRand(0.5f, 1.5f), 0.0f);
     }
 }

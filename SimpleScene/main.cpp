@@ -250,6 +250,13 @@ int main()
     } catch (...) {
         std::cout << "ERROR: Failed to load orb shader!" << std::endl;
     }
+    // 台灯光晕着色器
+    Shader* lampGlowShader = nullptr;
+    try {
+        lampGlowShader = new Shader("lamp_glow.vs", "lamp_glow.fs");
+    } catch (...) {
+        std::cout << "ERROR: Failed to load lamp glow shader!" << std::endl;
+    }
 
     // --- 加载模型 ---
     Model ourModel("resource/model/table3.obj");
@@ -280,7 +287,7 @@ int main()
         }
     }
     if (!horseModel) {
-        std::cout << "Warning: Failed to load horse statue model. Please export the .blend file as .obj or .fbx format and place it in the resource/horse_statue_01_4k.blend/ folder." << std::endl;
+        // std::cout << "Warning: Failed to load horse statue model. Please export the .blend file as .obj or .fbx format and place it in the resource/horse_statue_01_4k.blend/ folder." << std::endl;
     }
 
     // 加载书架模型
@@ -469,6 +476,36 @@ int main()
         std::cout << "Failed to load brick wall texture" << std::endl;
     }
     stbi_image_free(brickWallData);
+
+    // --- 加载台灯光晕纹理 ---
+    unsigned int lampGlowTexture;
+    glGenTextures(1, &lampGlowTexture);
+    glBindTexture(GL_TEXTURE_2D, lampGlowTexture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    int lampGlowWidth, lampGlowHeight, lampGlowNrChannels;
+    unsigned char *lampGlowData = stbi_load("resource/textures/lamp.jpg", &lampGlowWidth, &lampGlowHeight, &lampGlowNrChannels, 0);
+    if (lampGlowData)
+    {
+        GLenum format = GL_RGB;
+        if (lampGlowNrChannels == 1)
+            format = GL_RED;
+        else if (lampGlowNrChannels == 3)
+            format = GL_RGB;
+        else if (lampGlowNrChannels == 4)
+            format = GL_RGBA;
+        
+        glTexImage2D(GL_TEXTURE_2D, 0, format, lampGlowWidth, lampGlowHeight, 0, format, GL_UNSIGNED_BYTE, lampGlowData);
+        glGenerateMipmap(GL_TEXTURE_2D);
+        std::cout << "Loaded lamp glow texture successfully (" << lampGlowWidth << "x" << lampGlowHeight << ", channels: " << lampGlowNrChannels << ")" << std::endl;
+    }
+    else
+    {
+        std::cout << "Failed to load lamp glow texture: " << stbi_failure_reason() << std::endl;
+    }
+    stbi_image_free(lampGlowData);
 
     // --- 加载中文消息纹理（用于显示"已拾取灵珠！"） ---
     unsigned int messageTexture;
@@ -1955,6 +1992,41 @@ int main()
             
         }
 
+        // --- 绘制台灯光晕（仅在开灯时） ---
+        if (lampOn && lampGlowShader) {
+            // 启用混合以支持透明度
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            // 禁用深度测试和深度写入，让光晕始终显示
+            glDisable(GL_DEPTH_TEST);
+            glDepthMask(GL_FALSE);
+            
+            lampGlowShader->use();
+            lampGlowShader->setMat4("projection", projection);
+            lampGlowShader->setMat4("view", view);
+            
+            // 设置光晕位置（台灯位置）
+            glm::vec3 glowPos = lampModelWorldPos + glm::vec3(0.0f, 0.2f, 0.0f); // 稍微向上偏移
+            lampGlowShader->setVec3("centerPos", glowPos);
+            lampGlowShader->setVec2("size", glm::vec2(0.6f, 0.8f)); // 光晕大小（调小）
+            
+            // 设置纹理和强度
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, lampGlowTexture);
+            lampGlowShader->setInt("glowTexture", 0);
+            lampGlowShader->setFloat("glowIntensity", 1.5f);  // 光晕强度（可调整：1.0-3.0）
+            
+            // 使用eVAO（四边形）渲染
+            glBindVertexArray(eVAO);
+            glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+            glBindVertexArray(0);
+            
+            // 恢复状态
+            glEnable(GL_DEPTH_TEST);
+            glDepthMask(GL_TRUE);
+            glDisable(GL_BLEND);
+        }
+
         // --- 绘制地形沙盘 ---
         {
             sandboxShader.use();
@@ -2620,6 +2692,7 @@ int main()
     if (textDisplayShader) delete textDisplayShader;
     if (billboardShader) delete billboardShader;
     if (orbShader) delete orbShader;
+    if (lampGlowShader) delete lampGlowShader;
     glDeleteVertexArrays(1, &sphereVAO);
     glDeleteBuffers(1, &sphereVBO);
     glDeleteBuffers(1, &sphereEBO);
