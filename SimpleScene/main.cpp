@@ -30,6 +30,8 @@ void mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
 bool rayHitLamp(const glm::vec3& rayOrigin, const glm::vec3& rayDir); // 射线检测函数，判断是否击中台灯
 bool isNearHorse(const glm::vec3& playerPos, const glm::vec3& horsePos, float threshold); // 检查玩家是否靠近马雕像
 glm::vec3 clampToRoomBounds(const glm::vec3& position); // 限制位置在房间范围内
+glm::vec3 clampTableToRoomBounds(const glm::vec3& position); // 限制书桌位置在房间范围内（z轴边界减少1.0f）
+glm::vec3 clampToTableBounds(const glm::vec3& relativePos, const glm::vec3& tablePos); // 限制相对位置在书桌范围内（考虑房间边界）
 bool areHorsesAtZAxisEnd(); // 检查两个马是否都在z轴尽头（已弃用，改用isHorse1OnTile1和isHorse2OnTile2）
 bool isHorse1OnTile1(); // 检查马1是否在地砖1范围内
 bool isHorse2OnTile2(); // 检查马2是否在地砖2范围内
@@ -51,6 +53,16 @@ float savedCameraPitch = 0.0f; // 保存进入控制模式前的相机Pitch
 glm::vec3 initialCameraPosition(0.0f, 0.0f, 11.0f); // 程序启动时的初始相机位置
 float initialCameraYaw = -90.0f; // 程序启动时的初始相机Yaw
 float initialCameraPitch = 0.0f; // 程序启动时的初始相机Pitch
+
+// 书桌和台灯控制状态
+bool isControllingTable = false; // 是否正在控制书桌
+bool isControllingLamp = false; // 是否正在控制台灯
+glm::vec3 tablePosition(0.0f, -3.0f, 0.0f); // 书桌位置（相对于sceneOrigin）
+glm::vec3 lampRelativePos(-1.0f, 5.22f, -0.5f); // 台灯相对于书桌的位置（x, y相对高度, z）- 原始y=-0.8，书桌y=-3.0，相对高度=2.2
+glm::vec3 sandboxRelativePos(0.5f, 4.62f, -1.0f); // 沙盘相对于书桌的位置（x, y相对高度, z）- 原始y=-1.4，书桌y=-3.0，相对高度=1.6
+const float TABLE_SIZE_X = 2.0f; // 书桌X方向半尺寸（估算）
+const float TABLE_SIZE_Z = 2.0f; // 书桌Z方向半尺寸（估算）
+const float LAMP_MOVE_SCALE = 0.6f; // 台灯运动范围缩放因子（缩小到60%）
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
@@ -1466,6 +1478,9 @@ int main()
         // --- 定义场景原点，将所有物体移动到房子中心 ---
         glm::vec3 sceneOrigin = glm::vec3(0.0f, 0.0f, 0.0f); 
 
+        // 计算台灯和沙盘的世界位置（在渲染循环开始处计算，供所有渲染使用）
+        lampModelWorldPos = sceneOrigin + tablePosition + glm::vec3(lampRelativePos.x, tablePosition.y + lampRelativePos.y, lampRelativePos.z);
+
         // 将光源移动到房间正上方
         glm::vec3 lightPos = glm::vec3(0.0f, 2.5f, 0.0f);
 
@@ -1963,7 +1978,7 @@ int main()
 
             // 渲染书桌模型
             model = glm::mat4(1.0f);
-            model = glm::translate(model, sceneOrigin + glm::vec3(0.0f, -3.0f, 0.0f));
+            model = glm::translate(model, sceneOrigin + tablePosition);
             model = glm::scale(model, glm::vec3(0.5f, 0.5f, 0.7f));	// 书桌模型
             model = glm::rotate(model, glm::radians(90.0f), glm::vec3(0.0f, 1.0f, 0.0f)); // 旋转90度，使桌子朝前
             modelShader.setMat4("model", model);
@@ -1983,9 +1998,8 @@ int main()
             // 为台灯设置一个新的 model 矩阵
             modelShader.use(); 
             model = glm::mat4(1.0f);
-            // 把台灯移动到桌子上的一个偏左位置
-            lampModelWorldPos = sceneOrigin + glm::vec3(-1.0f, -0.8f, -0.5f);
-            model = glm::translate(model, lampModelWorldPos); // 使用计算好的世界坐标
+            // 使用在渲染循环开始处计算好的世界坐标
+            model = glm::translate(model, lampModelWorldPos);
             model = glm::scale(model, glm::vec3(0.3f)); // 调整台灯使尺寸合适
             modelShader.setMat4("model", model);
             lampModel.Draw(modelShader);
@@ -2043,8 +2057,9 @@ int main()
             sandboxShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);    
 
             model = glm::mat4(1.0f);
-            // 将沙盘放在书桌上
-            model = glm::translate(model, sceneOrigin + glm::vec3(0.5f, -1.4f, -1.0f)); 
+            // 计算沙盘的世界位置（书桌位置 + 相对位置）
+            glm::vec3 sandboxWorldPos = sceneOrigin + tablePosition + glm::vec3(sandboxRelativePos.x, tablePosition.y + sandboxRelativePos.y, sandboxRelativePos.z);
+            model = glm::translate(model, sandboxWorldPos); 
             sandboxShader.setMat4("model", model);
 
             // 绘制沙盘 (根据选择的方法)
@@ -2713,9 +2728,17 @@ void processInput(GLFWwindow* window)
     // E键处理：进入/退出控制模式 或 拾取灵珠
     if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS && !eKeyPressed) {
         eKeyPressed = true;
-        if (isControllingHorse) {
+        if (isControllingHorse || isControllingTable || isControllingLamp) {
             // 退出控制模式：恢复相机状态
-            isControllingHorse = false;
+            if (isControllingHorse) {
+                isControllingHorse = false;
+            }
+            if (isControllingTable) {
+                isControllingTable = false;
+            }
+            if (isControllingLamp) {
+                isControllingLamp = false;
+            }
             camera.Position = savedCameraPosition;
             camera.Yaw = savedCameraYaw;
             camera.Pitch = savedCameraPitch;
@@ -2723,10 +2746,18 @@ void processInput(GLFWwindow* window)
             std::cout << "退出控制模式" << std::endl;
         } else {
             glm::vec3 playerPos = camera.Position;
+            glm::vec3 sceneOrigin = glm::vec3(0.0f, 0.0f, 0.0f); // 与渲染循环中的sceneOrigin保持一致
+            glm::vec3 tableWorldPos = sceneOrigin + tablePosition;
+            glm::vec3 lampWorldPos = tableWorldPos + glm::vec3(lampRelativePos.x, tablePosition.y + lampRelativePos.y, lampRelativePos.z);
+            float distanceToTable = glm::length(playerPos - (tableWorldPos + glm::vec3(0.0f, 0.5f, 0.0f))); // 使用书桌中心上方一点作为检测点
+            float distanceToLamp = glm::length(playerPos - lampWorldPos);
+            
             bool nearHorse1 = isNearHorse(playerPos, horse1Position, INTERACTION_DISTANCE);
             bool nearHorse2 = isNearHorse(playerPos, horse2Position, INTERACTION_DISTANCE);
+            bool nearTable = distanceToTable < INTERACTION_DISTANCE;
+            bool nearLamp = distanceToLamp < INTERACTION_DISTANCE;
             
-            // 优先检查是否靠近马雕像（如果靠近马，就不检查灵珠）
+            // 优先检查是否靠近马雕像（如果靠近马，就不检查其他交互）
             if (nearHorse1) {
                 // 保存当前相机状态（用于退出时恢复）
                 savedCameraPosition = camera.Position;
@@ -2759,19 +2790,36 @@ void processInput(GLFWwindow* window)
                 controlledHorseIndex = 1;
                 
                 std::cout << "进入控制模式 - 马雕像2" << std::endl;
+            } else if (nearTable) {
+                // 保存当前相机状态（用于退出时恢复）
+                savedCameraPosition = camera.Position;
+                savedCameraYaw = camera.Yaw;
+                savedCameraPitch = camera.Pitch;
+                
+                // 进入控制模式：将相机设置为程序启动时的初始视角
+                camera.Position = initialCameraPosition;
+                camera.Yaw = initialCameraYaw;
+                camera.Pitch = initialCameraPitch;
+                camera.ProcessMouseMovement(0.0f, 0.0f); // 触发向量更新
+                
+                isControllingTable = true;
+                std::cout << "进入控制模式 - 书桌" << std::endl;
+            } else if (nearLamp) {
+                // 保存当前相机状态（用于退出时恢复）
+                savedCameraPosition = camera.Position;
+                savedCameraYaw = camera.Yaw;
+                savedCameraPitch = camera.Pitch;
+                
+                // 进入控制模式：将相机设置为程序启动时的初始视角
+                camera.Position = initialCameraPosition;
+                camera.Yaw = initialCameraYaw;
+                camera.Pitch = initialCameraPitch;
+                camera.ProcessMouseMovement(0.0f, 0.0f); // 触发向量更新
+                
+                isControllingLamp = true;
+                std::cout << "进入控制模式 - 台灯" << std::endl;
             } else {
-                // 只有在不靠近马雕像的情况下，才检查其他交互
-                // 按钮交互已注释，改用马的旋转触发
-                // if (!buttonPressed) {
-                //     float distanceToButton = glm::length(playerPos - buttonPosition);
-                //     if (distanceToButton < INTERACTION_DISTANCE) {
-                //         // 按下按钮，触发书柜移动
-                //         buttonPressed = true;
-                //         shelfMoving = true;
-                //         shelfMoveProgress = 0.0f;
-                //         std::cout << "按下按钮，书柜开始向左移动" << std::endl;
-                //     }
-                // }
+                // 只有在不靠近马、书桌、台灯的情况下，才检查其他交互
                 // 检查是否拾取灵珠
                 if (!orbPicked && isFloorTileLifting && floorLiftProgress > 0.0f) {
                     glm::vec3 orbPos = glm::vec3(g_tileWorldCenterX, g_holeCenterY, g_tileWorldCenterZ);
@@ -2830,6 +2878,78 @@ void processInput(GLFWwindow* window)
             // R键：逆时针旋转（Y轴减少）
             horseRotY -= rotationSpeed;
         }
+    } else if (isControllingTable) {
+        // 控制书桌：只移动书桌，只能沿x和z轴移动
+        glm::vec3 moveDir(0.0f);
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            moveDir += camera.Front;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            moveDir -= camera.Front;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            moveDir -= camera.Right;
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            moveDir += camera.Right;
+        
+        // 归一化移动方向，并限制在水平平面内（Y=0，只能x和z轴移动）
+        if (glm::length(moveDir) > 0.0f) {
+            moveDir = glm::normalize(moveDir);
+            moveDir.y = 0.0f; // 限制在水平平面内
+            moveDir = glm::normalize(moveDir);
+            float moveSpeed = 2.5f * deltaTime;
+            
+            // 移动书桌（只改变x和z，y保持不变）
+            glm::vec3 oldTablePos = tablePosition;
+            tablePosition += moveDir * moveSpeed;
+            tablePosition.y = oldTablePos.y; // 保持y不变
+            tablePosition = clampTableToRoomBounds(tablePosition);
+        }
+        
+        // 方向键控制相机移动
+        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+            camera.ProcessKeyboard(FORWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+            camera.ProcessKeyboard(BACKWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+            camera.ProcessKeyboard(LEFT, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+            camera.ProcessKeyboard(RIGHT, deltaTime);
+    } else if (isControllingLamp) {
+        // 控制台灯：只移动台灯相对位置，只能沿x和z轴移动，限制在书桌范围内
+        glm::vec3 moveDir(0.0f);
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+            moveDir += camera.Front;
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+            moveDir -= camera.Front;
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            moveDir -= camera.Right;
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+            moveDir += camera.Right;
+        
+        // 归一化移动方向，并限制在水平平面内（Y=0，只能x和z轴移动）
+        if (glm::length(moveDir) > 0.0f) {
+            moveDir = glm::normalize(moveDir);
+            moveDir.y = 0.0f; // 限制在水平平面内
+            moveDir = glm::normalize(moveDir);
+            float moveSpeed = 2.5f * deltaTime;
+            
+            // 移动台灯相对位置（只改变x和z，y相对高度保持不变）
+            lampRelativePos.x += moveDir.x * moveSpeed;
+            lampRelativePos.z += moveDir.z * moveSpeed;
+            // y保持不变（相对高度）
+            glm::vec3 clampedPos = clampToTableBounds(glm::vec3(lampRelativePos.x, 0.0f, lampRelativePos.z), tablePosition);
+            lampRelativePos.x = clampedPos.x;
+            lampRelativePos.z = clampedPos.z;
+        }
+        
+        // 方向键控制相机移动
+        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+            camera.ProcessKeyboard(FORWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS)
+            camera.ProcessKeyboard(BACKWARD, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
+            camera.ProcessKeyboard(LEFT, deltaTime);
+        if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
+            camera.ProcessKeyboard(RIGHT, deltaTime);
     } else {
         // 正常模式：只移动相机
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
@@ -3017,6 +3137,58 @@ glm::vec3 clampToRoomBounds(const glm::vec3& position)
     clamped.x = glm::clamp(clamped.x, -3.5f, 3.5f);
     clamped.y = glm::clamp(clamped.y, -2.95f, 2.5f);
     clamped.z = glm::clamp(clamped.z, -3.5f, 3.5f);
+    return clamped;
+}
+
+// 限制书桌位置在房间范围内（z轴边界减少1.5f）
+glm::vec3 clampTableToRoomBounds(const glm::vec3& position)
+{
+    glm::vec3 clamped = position;
+    // 房间范围：x: -3.5 到 3.5, y: -2.95 到 2.5, z: -3.5 到 2.0（上限减少1.5f）
+    clamped.x = glm::clamp(clamped.x, -2.35f, 1.65f);
+    clamped.y = glm::clamp(clamped.y, -2.95f, 2.5f);
+    clamped.z = glm::clamp(clamped.z, -1.8f, 2.0f);
+    return clamped;
+}
+
+// 限制相对位置在书桌范围内（只限制x和z，y保持不变）
+// 考虑书桌位置和房间边界
+glm::vec3 clampToTableBounds(const glm::vec3& relativePos, const glm::vec3& tablePos)
+{
+    glm::vec3 clamped = relativePos;
+    
+    // 计算台灯的世界位置边界（书桌边界，应用缩放因子）
+    float lampSizeX = TABLE_SIZE_X * LAMP_MOVE_SCALE;
+    float lampSizeZ = TABLE_SIZE_Z * LAMP_MOVE_SCALE * 0.5;
+    float tableMinX = tablePos.x - lampSizeX;
+    float tableMaxX = tablePos.x + lampSizeX - 2.0f;
+    float tableMinZ = tablePos.z - lampSizeZ - 1.0f;
+    float tableMaxZ = tablePos.z + lampSizeZ - 0.8f;
+    
+    // 房间边界
+    float roomMinX = -3.5f;
+    float roomMaxX = 3.5f;
+    float roomMinZ = -3.5f;
+    float roomMaxZ = 3.5f;
+    
+    // 计算实际的边界（书桌边界和房间边界的交集）
+    float actualMinX = glm::max(tableMinX, roomMinX);
+    float actualMaxX = glm::min(tableMaxX, roomMaxX);
+    float actualMinZ = glm::max(tableMinZ, roomMinZ);
+    float actualMaxZ = glm::min(tableMaxZ, roomMaxZ);
+    
+    // 计算台灯的世界位置
+    glm::vec3 lampWorldPos = tablePos + relativePos;
+    
+    // 限制在世界位置边界内
+    lampWorldPos.x = glm::clamp(lampWorldPos.x, actualMinX, actualMaxX);
+    lampWorldPos.z = glm::clamp(lampWorldPos.z, actualMinZ, actualMaxZ);
+    
+    // 转换回相对位置（只改变x和z）
+    clamped.x = lampWorldPos.x - tablePos.x;
+    clamped.z = lampWorldPos.z - tablePos.z;
+    
+    // y保持不变（相对高度）
     return clamped;
 }
 

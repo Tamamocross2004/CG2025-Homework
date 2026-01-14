@@ -1,15 +1,4 @@
-﻿  arrow_system.cpp
-D:\code\OpenGL\Project\Homework1\SimpleScene\arrow_system.cpp(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-D:\code\OpenGL\Project\Homework1\SimpleScene\arrow_system.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“arrow_system.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\model.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“arrow_system.cpp”)
-  
-D:\code\OpenGL\Project\Homework1\SimpleScene\mesh.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
-  (编译源文件“arrow_system.cpp”)
-  
-  main.cpp
+﻿  main.cpp
 D:\code\OpenGL\Project\Homework1\SimpleScene\model.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
   (编译源文件“main.cpp”)
   
@@ -28,12 +17,11 @@ D:\code\OpenGL\Project\Homework1\SimpleScene\lightning.h(1,1): warning C4819: �
 D:\code\OpenGL\Project\Homework1\SimpleScene\arrow_system.h(1,1): warning C4819: 该文件包含不能在当前代码页(936)中表示的字符。请将该文件保存为 Unicode 格式以防止数据丢失
   (编译源文件“main.cpp”)
   
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1051,26): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1056,31): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1095,42): warning C4267: “=”: 从“size_t”转换到“unsigned int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1259,27): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1263,33): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1879,51): warning C4305: “参数”: 从“double”到“float”截断
-D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(2478,36): warning C4018: “<”: 有符号/无符号不匹配
-  正在生成代码...
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1100,26): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1105,31): warning C4244: “初始化”: 从“double”转换到“float”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1144,42): warning C4267: “=”: 从“size_t”转换到“unsigned int”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1308,27): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1312,33): warning C4267: “初始化”: 从“size_t”转换到“int”，可能丢失数据
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(1931,51): warning C4305: “参数”: 从“double”到“float”截断
+D:\code\OpenGL\Project\Homework1\SimpleScene\main.cpp(2565,36): warning C4018: “<”: 有符号/无符号不匹配
   SimpleScene.vcxproj -> D:\code\OpenGL\Project\Homework1\SimpleScene\x64\Debug\SimpleScene.exe
