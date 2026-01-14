@@ -1,0 +1,817 @@
+\documentclass{article}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{CJKutf8}
+\usepackage{hyperref}
+\geometry{a4paper, margin=1in}
+
+% 代码样式设置
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\footnotesize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2,
+    frame=single,
+    rulecolor=\color{black},
+    language=C++,
+    extendedchars=false,  % 重要：设为false
+    texcl=false,
+    inputencoding=utf8,
+    upquote=true,
+    columns=flexible,
+    literate={á}{{\'a}}1 {é}{{\'e}}1 {í}{{\'i}}1 {ó}{{\'o}}1 {ú}{{\'u}}1
+             {Á}{{\'A}}1 {É}{{\'E}}1 {Í}{{\'I}}1 {Ó}{{\'O}}1 {Ú}{{\'U}}1
+             {à}{{\`a}}1 {è}{{\`e}}1 {ì}{{\`i}}1 {ò}{{\`o}}1 {ù}{{\`u}}1
+             {À}{{\`A}}1 {È}{{\'E}}1 {Ì}{{\`I}}1 {Ò}{{\`O}}1 {Ù}{{\`U}}1
+             {ä}{{\"a}}1 {ë}{{\"e}}1 {ï}{{\"i}}1 {ö}{{\"o}}1 {ü}{{\"u}}1
+             {Ä}{{\"A}}1 {Ë}{{\"E}}1 {Ï}{{\"I}}1 {Ö}{{\"O}}1 {Ü}{{\"U}}1
+             {â}{{\^a}}1 {ê}{{\^e}}1 {î}{{\^i}}1 {ô}{{\^o}}1 {û}{{\^u}}1
+             {Â}{{\^A}}1 {Ê}{{\^E}}1 {Î}{{\^I}}1 {Ô}{{\^O}}1 {Û}{{\^U}}1
+             {ã}{{\~a}}1 {ẽ}{{\~e}}1 {ĩ}{{\~i}}1 {õ}{{\~o}}1 {ũ}{{\~u}}1
+             {Ã}{{\~A}}1 {Ẽ}{{\~E}}1 {Ĩ}{{\~I}}1 {Õ}{{\~O}}1 {Ũ}{{\~U}}1
+             {œ}{{\oe}}1 {Œ}{{\OE}}1 {æ}{{\ae}}1 {Æ}{{\AE}}1 {ß}{{\ss}}1
+             {ű}{{\H{u}}}1 {Ű}{{\H{U}}}1 {ő}{{\H{o}}}1 {Ő}{{\H{O}}}1
+             {ç}{{\c c}}1 {Ç}{{\c C}}1 {ø}{{\o}}1 {å}{{\r a}}1 {Å}{{\r A}}1
+             {€}{{\euro}}1 {£}{{\pounds}}1 {«}{{\guillemotleft}}1
+             {»}{{\guillemotright}}1 {ñ}{{\~n}}1 {Ñ}{{\~N}}1 {¿}{{?`}}1
+}
+
+\lstset{style=mystyle}
+
+\title{\begin{CJK}{UTF8}{gbsn}计算机图形学大作业：三维解谜场景实现\end{CJK}}
+\author{\begin{CJK}{UTF8}{gbsn}学号：523031910438 \quad 姓名：殷一峰\end{CJK}}
+\date{2026年1月}
+
+\begin{document}
+\begin{CJK}{UTF8}{gbsn}
+
+\maketitle
+
+\begin{abstract}
+本文实现了一个基于OpenGL的三维解谜场景，集成了复杂的光照系统、物理交互和粒子特效。场景包含可交互的中式台灯、地板砖翘起机制、灵珠系统以及箭矢粒子系统。通过创新的交互设计，用户可以通过移动、旋转马雕像、书桌、台灯等来触发机关，从而逐步解锁隐藏内容。项目实现了HDR渲染、Bloom、基于Billboard技术的台灯光晕效果、纹理映射、模型加载、粒子系统等核心图形学技术。
+\end{abstract}
+
+\section{项目概述}
+
+\subsection{项目目标}
+本项目旨在创建一个沉浸式的中式三维解谜场景，主要目标包括：
+\begin{enumerate}
+    \item 实现真实的光照效果，特别是台灯的开关控制及基于Billboard的光晕效果
+    \item 设计复杂的交互机制，包括物体移动、旋转和机关触发
+    \item 实现粒子系统用于箭矢特效
+    \item 构建完整的解谜流程，包括灵珠获取和陷阱触发
+\end{enumerate}
+
+\subsection{技术栈}
+\begin{itemize}
+    \item 渲染引擎：OpenGL 3.3+
+    \item 着色器语言：GLSL
+    \item 模型加载：Assimp库
+    \item 纹理加载：stb\_image库
+    \item 数学运算：GLM库
+    \item 开发环境：C++17，Visual Studio 2022
+\end{itemize}
+
+\section{实现方法详解}
+
+\subsection{台灯光照系统}
+
+\subsubsection{HDR渲染与Bloom效果}
+为实现台灯的真实发光效果，项目采用了HDR（High Dynamic Range）渲染管线。代码首先创建HDR帧缓冲对象（FBO），用于渲染场景。然后创建两个16位浮点颜色纹理作为多渲染目标，配置纹理参数为线性过滤和边缘 clamping。接着创建深度渲染缓冲对象（RBO）用于深度测试。最后配置OpenGL使用多个颜色附件，实现多渲染目标输出。
+
+\begin{lstlisting}[caption=HDR FBO创建]
+glGenFramebuffers(1, &hdrFBO);
+glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+
+glGenTextures(2, colorBuffers);
+for (unsigned int i = 0; i < 2; i++)
+{
+    glBindTexture(GL_TEXTURE_2D, colorBuffers[i]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0 + i, GL_TEXTURE_2D, colorBuffers[i], 0);
+}
+
+unsigned int rboDepth;
+glGenRenderbuffers(1, &rboDepth);
+glBindRenderbuffer(GL_RENDERBUFFER, rboDepth);
+glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, SCR_WIDTH, SCR_HEIGHT);
+glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, rboDepth);
+
+unsigned int attachments[2] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1 };
+glDrawBuffers(2, attachments);
+\end{lstlisting}
+
+\subsubsection{Bloom实现流程}
+\begin{enumerate}
+    \item \textbf{亮度提取}：使用阈值过滤提取亮部区域。着色器首先采样场景纹理，使用标准灰度公式（RGB权重分别为0.2126、0.7152、0.0722）计算像素亮度。如果亮度低于阈值，则将结果设为黑色，否则保留原始HDR颜色。
+
+    \begin{lstlisting}[caption=亮度阈值着色器]
+#version 330 core
+out vec4 FragColor;
+
+in vec2 TexCoords;
+
+uniform sampler2D sceneTexture;
+uniform float threshold;
+
+void main()
+{
+    vec3 hdrColor = texture(sceneTexture, TexCoords).rgb;
+    
+    float brightness = dot(hdrColor, vec3(0.2126, 0.7152, 0.0722));
+    
+    vec3 result = hdrColor;
+    if (brightness < threshold) {
+        result = vec3(0.0);
+    }
+    
+    FragColor = vec4(result, 1.0);
+}
+    \end{lstlisting}
+    
+    \item \textbf{高斯模糊}：采用Ping-Pong FBO技术进行双向模糊。首先创建两个Ping-Pong帧缓冲对象，用于交替进行水平和垂直方向的模糊。模糊着色器使用5x5高斯核，通过分离的水平/垂直模糊步骤，将O(n²)的2D高斯模糊降低为O(2n)，大幅提升性能。在Ping-Pong迭代过程中，每次迭代交替水平和垂直方向，从当前FBO读取，模糊后写入另一个FBO。
+
+    \begin{lstlisting}[caption=Ping-Pong FBO创建]
+glGenFramebuffers(2, pingpongFBO);
+glGenTextures(2, pingpongColorBuffers);
+for (unsigned int i = 0; i < 2; i++)
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[i]);
+    glBindTexture(GL_TEXTURE_2D, pingpongColorBuffers[i]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB16F, SCR_WIDTH, SCR_HEIGHT, 0, GL_RGB, GL_FLOAT, NULL);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, pingpongColorBuffers[i], 0);
+}
+    \end{lstlisting}
+
+    \begin{lstlisting}[caption=高斯模糊Ping-Pong迭代实现]
+bool horizontal = true, first_iteration = true;
+bloomBlurShader->use();
+for (unsigned int i = 0; i < bloomAmount; i++)
+{
+    glBindFramebuffer(GL_FRAMEBUFFER, pingpongFBO[horizontal]);
+    bloomBlurShader->setBool("horizontal", horizontal);
+    bloomBlurShader->setFloat("blurSize", 1.0f);
+    
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, first_iteration ? pingpongColorBuffers[0] : pingpongColorBuffers[!horizontal]);
+    bloomBlurShader->setInt("image", 0);
+    
+    glBindVertexArray(quadVAO);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+    
+    horizontal = !horizontal;
+    if (first_iteration)
+        first_iteration = false;
+}
+    \end{lstlisting}
+
+    \begin{lstlisting}[caption=高斯模糊着色器]
+#version 330 core
+out vec4 FragColor;
+
+in vec2 TexCoords;
+
+uniform sampler2D image;
+uniform bool horizontal;
+uniform float blurSize;
+
+const float weight[5] = float[] (0.227027, 0.1945946, 0.1216216, 0.054054, 0.016216);
+
+void main()
+{
+    vec2 tex_offset = 1.0 / textureSize(image, 0);
+    vec3 result = texture(image, TexCoords).rgb * weight[0];
+    
+    if(horizontal)
+    {
+        for(int i = 1; i < 5; ++i)
+        {
+            result += texture(image, TexCoords + vec2(tex_offset.x * i * blurSize, 0.0)).rgb * weight[i];
+            result += texture(image, TexCoords - vec2(tex_offset.x * i * blurSize, 0.0)).rgb * weight[i];
+        }
+    }
+    else
+    {
+        for(int i = 1; i < 5; ++i)
+        {
+            result += texture(image, TexCoords + vec2(0.0, tex_offset.y * i * blurSize)).rgb * weight[i];
+            result += texture(image, TexCoords - vec2(0.0, tex_offset.y * i * blurSize)).rgb * weight[i];
+        }
+    }
+    
+    FragColor = vec4(result, 1.0);
+}
+    \end{lstlisting}
+
+    高斯模糊着色器使用5x5高斯核的权重值，根据horizontal参数选择水平或垂直方向进行采样。对于每个像素，采样中心像素和左右（水平）或上下（垂直）各4个像素，使用预计算的权重进行加权平均，实现平滑的高斯模糊效果。
+
+    \item \textbf{最终混合}：将模糊后的光晕叠加到原始场景。代码绑定默认帧缓冲，使用最终混合着色器同时采样原始场景纹理和模糊后的Bloom纹理，通过加法混合将两者结合，并使用色调映射函数防止过曝。
+
+    \begin{lstlisting}[caption=最终混合实现]
+glBindFramebuffer(GL_FRAMEBUFFER, 0);
+glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+bloomFinalShader->use();
+glActiveTexture(GL_TEXTURE0);
+glBindTexture(GL_TEXTURE_2D, colorBuffers[0]);
+bloomFinalShader->setInt("sceneTexture", 0);
+glActiveTexture(GL_TEXTURE1);
+glBindTexture(GL_TEXTURE_2D, pingpongColorBuffers[!horizontal]);
+bloomFinalShader->setInt("bloomTexture", 1);
+bloomFinalShader->setFloat("bloomStrength", 0.8f);
+
+glBindVertexArray(quadVAO);
+glDrawArrays(GL_TRIANGLES, 0, 6);
+glBindVertexArray(0);
+    \end{lstlisting}
+
+    \begin{lstlisting}[caption=最终混合着色器]
+#version 330 core
+out vec4 FragColor;
+
+in vec2 TexCoords;
+
+uniform sampler2D sceneTexture;
+uniform sampler2D bloomTexture;
+uniform float bloomStrength;
+
+void main()
+{
+    vec3 hdrColor = texture(sceneTexture, TexCoords).rgb;
+    vec3 bloomColor = texture(bloomTexture, TexCoords).rgb;
+    
+    vec3 result = hdrColor + bloomColor * bloomStrength;
+    
+    result = vec3(1.0) - exp(-result * 1.0);
+    
+    FragColor = vec4(result, 1.0);
+}
+    \end{lstlisting}
+
+    最终混合着色器使用两个纹理：原始场景纹理和模糊后的Bloom纹理。通过加法混合将Bloom效果添加到原始场景（Bloom颜色乘以强度参数），然后使用指数色调映射函数将HDR颜色映射到LDR显示范围，防止过曝并保持细节。
+\end{enumerate}
+
+\subsubsection{台灯光晕的Billboard实现}
+台灯光晕采用Billboard技术实现，确保光晕始终面向相机。实现分为以下几个部分：
+
+\paragraph{顶点数据准备}
+使用归一化的四边形顶点（-0.5到0.5范围），在顶点着色器中进行世界空间变换。顶点数据定义了一个中心在原点、边长为1的四边形，四个顶点分别位于左下、右下、右上和左上位置。
+
+\begin{lstlisting}[caption=台灯光晕顶点数据]
+float eQuadVertices[] = {
+    -0.5f, -0.5f, 0.0f,
+     0.5f, -0.5f, 0.0f,
+     0.5f,  0.5f, 0.0f,
+    -0.5f,  0.5f, 0.0f
+};
+\end{lstlisting}
+
+\paragraph{Billboard顶点着色器}
+在顶点着色器中，从view矩阵提取相机的右向量和上向量，构建始终面向相机的平面。着色器首先从view矩阵提取旋转部分并转置（对于旋转矩阵，转置等于逆矩阵）得到相机的右向量和上向量。然后根据输入顶点坐标和Billboard大小，在相机空间内计算四个角的实际位置。最后将纹理坐标从-0.5到0.5范围映射到0.0到1.0范围。
+
+\begin{lstlisting}[caption=Billboard顶点着色器核心逻辑]
+#version 330 core
+layout (location = 0) in vec3 aPos;
+
+uniform mat4 projection;
+uniform mat4 view;
+uniform vec3 centerPos;
+uniform vec2 size;
+
+out vec2 TexCoords;
+
+void main()
+{
+    mat3 viewRot = mat3(view);
+    mat3 invViewRot = transpose(viewRot);
+    
+    vec3 right = invViewRot[0];
+    vec3 up = invViewRot[1];
+    
+    vec3 pos = centerPos;
+    pos += right * (aPos.x * size.x);
+    pos += up * (aPos.y * size.y);
+    
+    gl_Position = projection * view * vec4(pos, 1.0);
+    
+    TexCoords = vec2(aPos.x + 0.5, aPos.y + 0.5);
+}
+\end{lstlisting}
+
+\subsection{书桌与台灯移动控制系统}
+
+\subsubsection{相对位置管理系统}
+系统采用相对位置管理机制，实现书桌移动时台灯和沙盘的同步跟随。代码定义了书桌相对于场景原点的位置，以及台灯和沙盘相对于书桌的位置。在渲染循环中，通过将场景原点、书桌位置和相对位置相加，计算出台灯和沙盘的世界坐标。
+
+\begin{lstlisting}[caption=相对位置数据结构]
+glm::vec3 tablePosition(0.0f, -3.0f, 0.0f);
+glm::vec3 lampRelativePos(-1.0f, 5.22f, -0.5f);
+glm::vec3 sandboxRelativePos(0.5f, 4.62f, -1.0f);
+\end{lstlisting}
+
+\begin{lstlisting}[caption=世界位置计算]
+lampModelWorldPos = sceneOrigin + tablePosition + 
+    glm::vec3(lampRelativePos.x, tablePosition.y + lampRelativePos.y, lampRelativePos.z);
+
+glm::vec3 sandboxWorldPos = sceneOrigin + tablePosition + 
+    glm::vec3(sandboxRelativePos.x, tablePosition.y + sandboxRelativePos.y, sandboxRelativePos.z);
+\end{lstlisting}
+
+\subsection{纹理系统实现}
+
+\subsubsection{中式地砖纹理}
+地板采用重复纹理映射技术，实现无缝拼接。代码使用stb\_image库加载纹理图片，根据通道数确定OpenGL纹理格式（单通道为RED，三通道为RGB，四通道为RGBA），然后将纹理数据上传到GPU并生成多级渐远纹理（Mipmap）。
+
+\begin{lstlisting}[caption=地板纹理加载与设置]
+int floorWidth, floorHeight, floorNrChannels;
+unsigned char* floorData = stbi_load("resource/plank_flooring_04_4k.blend/textures/plank_flooring_04_diff_4k.jpg", 
+                                     &floorWidth, &floorHeight, &floorNrChannels, 0);
+if (floorData)
+{
+    GLenum format = GL_RGB;
+    if (floorNrChannels == 1)
+        format = GL_RED;
+    else if (floorNrChannels == 3)
+        format = GL_RGB;
+    else if (floorNrChannels == 4)
+        format = GL_RGBA;
+    
+    glTexImage2D(GL_TEXTURE_2D, 0, format, floorWidth, floorHeight, 0, format, GL_UNSIGNED_BYTE, floorData);
+    glGenerateMipmap(GL_TEXTURE_2D);
+}
+stbi_image_free(floorData);
+\end{lstlisting}
+
+\subsection{模型导入系统}
+
+\subsubsection{Assimp模型加载}
+封装Model类以支持多种格式的模型导入：
+
+\begin{lstlisting}[caption=Model类核心结构]
+class Model
+{
+public:
+    Model(const char* path) { loadModel(path); }
+    void Draw(Shader& shader);
+    
+private:
+    vector<Mesh> meshes;
+    string directory;
+    
+    void loadModel(string path);
+    void processNode(aiNode* node, const aiScene* scene);
+    Mesh processMesh(aiMesh* mesh, const aiScene* scene);
+    vector<Texture> loadMaterialTextures(aiMaterial* mat, 
+                                        aiTextureType type, 
+                                        string typeName);
+};
+\end{lstlisting}
+
+\subsection{解谜游戏机制}
+
+\subsubsection{马的移动旋转控制}
+系统实现了马雕像的控制机制，用户可以通过E键进入控制模式，使用WASD键移动马雕像，Q和R键旋转马雕像。
+
+\paragraph{控制模式进入机制}
+用户靠近马雕像时按E键进入控制模式，系统保存当前相机状态并切换到固定视角。代码首先保存当前相机的位置、偏航角和俯仰角，然后将相机移动到预设的初始位置和角度，触发向量更新，设置控制标志并输出调试信息。
+
+\begin{lstlisting}[caption=控制模式进入代码]
+if (nearHorse1) {
+    savedCameraPosition = camera.Position;
+    savedCameraYaw = camera.Yaw;
+    savedCameraPitch = camera.Pitch;
+    
+    camera.Position = initialCameraPosition;
+    camera.Yaw = initialCameraYaw;
+    camera.Pitch = initialCameraPitch;
+    camera.ProcessMouseMovement(0.0f, 0.0f);
+    
+    isControllingHorse = true;
+    controlledHorseIndex = 0;
+    
+    std::cout << "进入控制模式 - 马雕像1" << std::endl;
+}
+\end{lstlisting}
+
+\paragraph{移动控制实现}
+控制模式下，WASD键控制马雕像在水平平面内移动，移动方向基于相机视角方向。代码根据当前控制的对象索引选择对应的位置变量，然后根据WASD按键状态累加移动方向向量（W/S键基于相机前向量，A/D键基于相机右向量）。移动方向被归一化并限制在水平平面内（Y分量为0），然后按固定速度移动模型位置，最后将位置限制在房间边界内。
+
+\begin{lstlisting}[caption=马的移动控制代码]
+if (isControllingHorse) {
+    glm::vec3& horsePos = (controlledHorseIndex == 0) ? horse1Position : horse2Position;
+    
+    glm::vec3 moveDir(0.0f);
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        moveDir += camera.Front;
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        moveDir -= camera.Front;
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        moveDir -= camera.Right;
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        moveDir += camera.Right;
+    
+    if (glm::length(moveDir) > 0.0f) {
+        moveDir = glm::normalize(moveDir);
+        moveDir.y = 0.0f;
+        moveDir = glm::normalize(moveDir);
+        float moveSpeed = 2.5f * deltaTime;
+        
+        horsePos += moveDir * moveSpeed;
+        horsePos = clampToRoomBounds(horsePos);
+    }
+}
+\end{lstlisting}
+
+\paragraph{旋转控制实现}
+Q和R键控制马雕像绕Y轴旋转，旋转速度固定为每秒90度。Q键增加Y轴旋转角度（顺时针），R键减少Y轴旋转角度（逆时针）。
+
+\begin{lstlisting}[caption=马的旋转控制代码]
+float rotationSpeed = 90.0f * deltaTime;
+if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+    horseRotY += rotationSpeed;
+}
+if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+    horseRotY -= rotationSpeed;
+}
+\end{lstlisting}
+
+\subsubsection{旋转角度触发机制}
+系统检测两个马雕像的旋转角度，当两者都旋转超过45度时触发动画序列。
+
+\paragraph{角度累计计算}
+系统记录每个马从初始角度转过的度数，处理角度环绕问题。代码计算当前角度与初始角度的差值，通过加减360度将角度差归一化到-180到180度范围内，然后取绝对值作为累计旋转角度。当两个马的累计旋转角度都超过阈值（45度）时，触发动画序列。
+
+\begin{lstlisting}[caption=旋转角度累计计算]
+if (!isAnimationSequenceActive) {
+    float horse1CurrentRotation = horse1RotationY;
+    float horse1Diff = horse1CurrentRotation - horse1InitialRotationY;
+    while (horse1Diff > 180.0f) horse1Diff -= 360.0f;
+    while (horse1Diff < -180.0f) horse1Diff += 360.0f;
+    horse1AccumulatedRotation = glm::abs(horse1Diff);
+    
+    float horse2CurrentRotation = horse2RotationY;
+    float horse2Diff = horse2CurrentRotation - horse2InitialRotationY;
+    while (horse2Diff > 180.0f) horse2Diff -= 360.0f;
+    while (horse2Diff < -180.0f) horse2Diff += 360.0f;
+    horse2AccumulatedRotation = glm::abs(horse2Diff);
+    
+    if (horse1AccumulatedRotation >= HORSE_ROTATION_THRESHOLD && horse2AccumulatedRotation >= HORSE_ROTATION_THRESHOLD) {
+        shelfMoving = true;
+        shelfMoveProgress = 0.0f;
+        std::cout << "两只马都旋转超过45度，触发动画序列！书柜开始移动" << std::endl;
+    }
+}
+\end{lstlisting}
+
+\subsubsection{书柜移动动画}
+书柜移动动画通过进度变量控制，实现平滑的线性插值移动。动画系统使用0.0到1.0的进度变量控制动画状态，位置计算采用线性插值确保动画平滑。书柜移动完成后自动触发下一个动画（砖墙旋转），形成动画链。反向移动完成后重置马的累计旋转角度，允许重复触发。
+
+\paragraph{正向移动动画}
+书柜向z轴负方向移动，移动距离为2.5个单位。代码使用进度变量（0.0到1.0）控制动画，根据进度计算移动距离并更新书柜位置。当进度达到1.0时，停止移动动画并触发砖墙旋转动画。
+
+\begin{lstlisting}[caption=书柜正向移动动画]
+if (shelfMoving) {
+    shelfMoveProgress = glm::min(1.0f, shelfMoveProgress + SHELF_MOVE_SPEED * deltaTime);
+    float moveAmount = shelfMoveProgress * SHELF_MOVE_DISTANCE;
+    shelfPosition.z = SHELF_INITIAL_Z - moveAmount; 
+    if (shelfMoveProgress >= 1.0f) {
+        shelfMoving = false;
+        if (!brickSquareRotating && !brickSquareRotatingBack) {
+            brickSquareRotating = true;
+            brickSquareRotationProgress = 0.0f;
+            std::cout << "书柜移动完成，砖墙开始旋转" << std::endl;
+        }
+    }
+}
+\end{lstlisting}
+
+\paragraph{反向移动动画}
+书柜反向移动回原位置，动画完成后重置马的累计旋转角度。代码递减进度变量，使书柜位置回到初始位置。当进度达到0.0时，重置所有状态变量，将马的累计旋转角度清零，并将初始角度更新为当前角度，以便重新开始累计。
+
+\begin{lstlisting}[caption=书柜反向移动动画]
+if (shelfMovingBack) {
+    shelfMoveProgress = glm::max(0.0f, shelfMoveProgress - SHELF_MOVE_SPEED * deltaTime);
+    float moveAmount = shelfMoveProgress * SHELF_MOVE_DISTANCE;
+    shelfPosition.z = SHELF_INITIAL_Z - moveAmount;
+    if (shelfMoveProgress <= 0.0f) {
+        shelfMovingBack = false;
+        shelfMoveProgress = 0.0f;
+        shelfPosition.z = SHELF_INITIAL_Z;
+        horse1AccumulatedRotation = 0.0f;
+        horse2AccumulatedRotation = 0.0f;
+        horse1InitialRotationY = horse1RotationY;
+        horse2InitialRotationY = horse2RotationY;
+        std::cout << "书柜回到原位置，动画序列结束，重置马的累计旋转度数" << std::endl;
+    }
+}
+\end{lstlisting}
+
+\subsubsection{灵珠系统实现}
+灵珠作为动态点光源，具有变色效果和交互功能。代码使用三个相位不同的正弦函数计算RGB颜色分量，实现动态变色效果。颜色经过归一化处理使其更鲜艳。光源仅在触发翘起效果且未拾取时启用，亮度设置为8.0。
+
+\begin{lstlisting}[caption=灵珠渲染与光照]
+glm::vec3 orbLightPos = glm::vec3(g_tileWorldCenterX, g_holeCenterY, g_tileWorldCenterZ);
+glm::vec3 orbColor;
+orbColor.r = 0.5f + 0.5f * sinf(currentFrame * 2.0f + 0.0f);
+orbColor.g = 0.5f + 0.5f * sinf(currentFrame * 2.0f + 2.094f);
+orbColor.b = 0.5f + 0.5f * sinf(currentFrame * 2.0f + 4.189f);
+if (glm::length(orbColor) > 0.001f) {
+    glm::vec3 normalizedOrbColor = glm::normalize(orbColor);
+    orbColor = normalizedOrbColor * 0.8f + orbColor * 0.2f;
+}
+bool orbLightEnabled = (isFloorTileLifting && floorLiftProgress > 0.0f && !orbPicked);
+lightingShader.setBool("orbLightOn", orbLightEnabled);
+lightingShader.setVec3("orbLight.position", orbLightPos);
+lightingShader.setVec3("orbLight.color", orbColor);
+lightingShader.setFloat("orbLight.intensity", orbLightEnabled ? 8.0f : 0.0f);
+\end{lstlisting}
+
+\subsubsection{灵珠光晕的Billboard实现}
+灵珠光晕同样采用Billboard技术实现，但与台灯光晕不同，灵珠光晕使用程序生成的颜色和脉动动画效果，无需纹理采样。实现分为以下几个部分：
+
+\paragraph{顶点着色器实现}
+灵珠光晕的顶点着色器与台灯光晕相同，使用相同的Billboard技术从view矩阵提取相机向量。着色器从view矩阵提取相机右向量和上向量，根据输入顶点坐标和Billboard大小计算四个角的实际位置，并将纹理坐标映射到0.0到1.0范围。
+
+\begin{lstlisting}[caption=灵珠光晕顶点着色器]
+#version 330 core
+layout (location = 0) in vec3 aPos;
+
+uniform mat4 projection;
+uniform mat4 view;
+uniform vec3 centerPos;
+uniform vec2 size;
+
+out vec2 TexCoords;
+
+void main()
+{
+    mat3 viewRot = mat3(view);
+    mat3 invViewRot = transpose(viewRot);
+    
+    vec3 right = invViewRot[0];
+    vec3 up = invViewRot[1];
+    
+    vec3 pos = centerPos;
+    pos += right * (aPos.x * size.x);
+    pos += up * (aPos.y * size.y);
+    
+    gl_Position = projection * view * vec4(pos, 1.0);
+    
+    TexCoords = vec2(aPos.x + 0.5, aPos.y + 0.5);
+}
+\end{lstlisting}
+
+\paragraph{程序生成颜色片段着色器}
+与台灯光晕使用纹理不同，灵珠光晕的片段着色器使用程序生成的颜色，并实现脉动动画效果。着色器不使用纹理，直接在着色器中计算颜色值。着色器计算从纹理中心到当前像素的距离，使用smoothstep函数创建径向渐变透明度，实现从中心到边缘逐渐透明的柔和光晕效果。颜色使用与灵珠本体相匹配的蓝紫色系（RGB: 0.5, 0.7, 1.0），通过正弦函数实现周期性亮度变化（脉动动画），增强视觉效果。最终颜色通过光晕强度缩放，透明度由径向渐变和距离决定。
+
+\begin{lstlisting}[caption=灵珠光晕片段着色器]
+#version 330 core
+out vec4 FragColor;
+
+in vec2 TexCoords;
+
+uniform float glowIntensity;
+uniform float time;
+
+void main()
+{
+    vec2 center = vec2(0.5, 0.5);
+    float dist = length(TexCoords - center);
+    
+    float alpha = 1.0 - smoothstep(0.0, 0.7, dist);
+    
+    float radialGradient = 1.0 - dist * 1.4;
+    radialGradient = max(radialGradient, 0.0);
+    
+    vec3 baseColor = vec3(0.5, 0.7, 1.0);
+    float pulse = 0.5 + 0.5 * sin(time * 2.0);
+    vec3 glowColor = baseColor * (0.8 + 0.2 * pulse);
+    
+    vec3 finalColor = glowColor * glowIntensity;
+    FragColor = vec4(finalColor, alpha * radialGradient);
+}
+\end{lstlisting}
+
+\subsection{箭矢粒子系统}
+
+\subsubsection{ArrowSystem类设计}
+采用对象池模式管理箭矢粒子，提高性能。Arrow结构体包含位置、速度、生命周期、旋转角度、激活状态和粘附状态。ArrowSystem类管理箭矢数组，提供更新、绘制、开始/停止发射等接口，内部维护生成位置、方向、速度、间隔等参数。
+
+\begin{lstlisting}[caption=Arrow结构体与ArrowSystem类]
+struct Arrow {
+    glm::vec3 position;
+    glm::vec3 velocity;
+    float life;
+    float rotationY;
+    bool active;
+    bool stuck;
+};
+
+class ArrowSystem {
+public:
+    ArrowSystem(Model* arrowModel, Shader* shader, const glm::vec3& spawnPosition);
+    ~ArrowSystem();
+    
+    void Update(float dt);
+    void Draw(const glm::mat4& view, const glm::mat4& projection, 
+              const glm::vec3& lightPos, const glm::vec3& viewPos, const glm::vec3& lightColor);
+    
+    void StartShooting();
+    void StopShooting();
+    bool IsShooting() const { return isShooting; }
+    
+private:
+    std::vector<Arrow> arrows;
+    unsigned int maxArrows;
+    Model* arrowModel;
+    Shader* arrowShader;
+    glm::vec3 spawnPosition;
+    glm::vec3 spawnDirection;
+    float arrowSpeed;
+    float spawnInterval;
+    float timeSinceLastSpawn;
+    bool isShooting;
+    float arrowLifetime;
+};
+\end{lstlisting}
+
+\section{程序实现与代码结构}
+
+\subsection{核心数据结构}
+
+\subsubsection{状态管理}
+全局状态变量包括动画状态（地板翘起、书柜移动及其进度）、灵珠状态（拾取标志、消息显示）、马雕像状态（旋转角度、累计旋转角度）、书桌和台灯控制状态（控制标志、位置变量），以及物理参数常量（Z轴阈值、交互距离、旋转阈值、移动缩放）。
+
+\begin{lstlisting}[caption=全局状态变量]
+bool isFloorTileLifting = false;
+float floorLiftProgress = 0.0f;
+bool shelfMoving = false;
+float shelfMoveProgress = 0.0f;
+
+bool orbPicked = false;
+bool showOrbPickupMessage = false;
+float messageDisplayTime = 0.0f;
+
+float horse1RotationY = 90.0f;
+float horse2RotationY = -90.0f;
+float horse1AccumulatedRotation = 0.0f;
+float horse2AccumulatedRotation = 0.0f;
+
+bool isControllingTable = false;
+bool isControllingLamp = false;
+glm::vec3 tablePosition(0.0f, -3.0f, 0.0f);
+glm::vec3 lampRelativePos(-1.0f, 5.22f, -0.5f);
+glm::vec3 sandboxRelativePos(0.5f, 4.62f, -1.0f);
+
+const float Z_AXIS_THRESHOLD = 3.0f;
+const float INTERACTION_DISTANCE = 3.0f;
+const float HORSE_ROTATION_THRESHOLD = 45.0f;
+const float LAMP_MOVE_SCALE = 0.6f;
+\end{lstlisting}
+
+\subsection{主要渲染循环}
+主渲染循环处理输入、更新游戏状态、计算世界坐标、渲染场景到HDR帧缓冲、应用Bloom后处理、渲染文本消息，最后交换缓冲区和处理事件。
+
+\begin{lstlisting}[caption=主渲染循环]
+void renderLoop()
+{
+    while (!glfwWindowShouldClose(window))
+    {
+        processInput(window);
+        
+        updateGameState(deltaTime);
+        
+        lampModelWorldPos = sceneOrigin + tablePosition + 
+            glm::vec3(lampRelativePos.x, 
+                      tablePosition.y + lampRelativePos.y, 
+                      lampRelativePos.z);
+        
+        glBindFramebuffer(GL_FRAMEBUFFER, hdrFBO);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        renderScene();
+        
+        applyBloom();
+        
+        if(showOrbPickupMessage)
+            renderTextMessage();
+        
+        glfwSwapBuffers(window);
+        glfwPollEvents();
+    }
+}
+\end{lstlisting}
+
+
+\section{运行结果与分析}
+
+\subsection{视觉效果}
+
+\subsubsection{台灯光照效果}
+台灯开启时，灯罩产生自发光效果，同时通过Bloom后处理产生光晕扩散。台灯光晕采用Billboard技术，始终面向相机，结合纹理采样和径向渐变，形成柔和的光晕效果。周围物体（书桌、地板）受到点光源照明，形成柔和的光影过渡。
+
+\subsubsection{纹理映射效果}
+中式地砖纹理通过重复映射实现无缝拼接，木质墙壁纹理通过不同的缩放比例适配各墙面。
+
+\subsubsection{灵珠特效}
+灵珠动态变色（RGB循环），作为强点光源照亮暗格内部，拾取后显示提示消息。
+
+\subsection{交互体验}
+
+\subsubsection{解谜流程}
+\begin{enumerate}
+    \item 用户通过WASD控制镜头移动，鼠标控制视角
+    \item 靠近马雕像按E键进入控制模式，移动和旋转马雕像
+    \item 靠近书桌按E键进入控制模式，使用WASD移动书桌，方向键控制相机
+    \item 靠近台灯按E键进入控制模式，使用WASD移动台灯（限制在书桌表面），方向键控制相机
+    \item 同时旋转两匹马超过45度触发机关
+    \item 观察书柜移动、砖墙旋转、箭矢发射
+    \item 将两匹马移动到房间尽头的砖块地板，触发暗格地板翘起
+    \item 靠近灵珠按E键拾取
+\end{enumerate}
+
+\section{收获与思考}
+
+\subsection{技术收获}
+
+\subsubsection{图形学技术}
+\begin{enumerate}
+    \item \textbf{HDR渲染管线}：掌握了高动态范围渲染的实现原理，理解浮点缓冲区的必要性
+    \item \textbf{Bloom后处理}：深入理解了亮度提取、高斯模糊、Ping-Pong FBO等关键技术
+    \item \textbf{Billboard技术}：掌握了使用view矩阵提取相机方向向量，实现始终面向相机的平面渲染
+    \item \textbf{相对位置系统}：理解了如何在3D场景中管理对象间的相对位置关系，实现联动效果
+    \item \textbf{粒子系统与碰撞检测}：掌握了对象池模式管理粒子、简单高效的碰撞检测算法
+    \item \textbf{现代OpenGL}：熟练使用着色器程序、统一变量、顶点缓冲对象等现代特性
+\end{enumerate}
+
+\subsubsection{软件工程实践}
+\begin{enumerate}
+    \item \textbf{代码架构设计}：采用模块化设计，分离渲染、逻辑、资源管理
+    \item \textbf{性能优化}：使用对象池、批量渲染、纹理复用等技术优化性能
+    \item \textbf{跨平台兼容}：使用标准库和跨平台API，确保代码可移植性
+\end{enumerate}
+
+\subsection{创新点与难点}
+
+\subsubsection{创新设计}
+\begin{itemize}
+    \item \textbf{双马触发机制}：通过旋转角度累计而非简单点击触发机关
+    \item \textbf{多级交互系统}：E键根据上下文执行不同操作，提升沉浸感
+    \item \textbf{Billboard光晕效果}：使用纹理和径向渐变实现柔和的台灯光晕
+    \item \textbf{相对位置联动}：书桌移动时，台灯和沙盘自动跟随，增强场景的真实感
+    \item \textbf{动态边界系统}：台灯移动边界随书桌位置动态调整，确保不超出房间范围
+    \item \textbf{动态光照融合}：灵珠光源与台灯光源共存，形成复杂光照环境
+    \item \textbf{高效碰撞检测}：使用简单平面检测替代复杂碰撞体，在保证效果的同时优化性能
+\end{itemize}
+
+\subsection{改进方向}
+
+\subsubsection{功能扩展}
+\begin{enumerate}
+    \item \textbf{声音系统}：添加环境音效、交互音效、背景音乐
+    \item \textbf{物理引擎}：集成Bullet或PhysX实现更真实的物理交互
+    \item \textbf{多光源阴影}：实现阴影映射，支持多个动态光源的阴影
+    \item \textbf{更多交互对象}：添加更多可移动和可交互的场景对象
+\end{enumerate}
+
+\subsubsection{性能优化}
+\begin{enumerate}
+    \item \textbf{渲染优化}：实现视锥体裁剪、遮挡剔除
+    \item \textbf{内存优化}：使用纹理压缩、模型LOD系统
+    \item \textbf{GPU优化}：实现计算着色器，将部分逻辑移至GPU
+\end{enumerate}
+
+\subsection{结论}
+
+本项目成功实现了一个功能完整的三维解谜场景，涵盖了现代图形学的多个核心技术。通过合理的系统设计和工程实现，创造了沉浸式的交互体验。项目不仅满足了作业的技术需求，还在用户体验和性能优化方面进行了深入探索。特别是新增的书桌与台灯移动控制系统，以及基于Billboard技术的台灯光晕效果，进一步增强了场景的交互性和视觉效果。通过本次实践，加深了对实时渲染、物理模拟、交互设计等领域的理解，为后续的图形学研究和开发工作奠定了坚实基础。
+
+\end{CJK}
+\end{document}

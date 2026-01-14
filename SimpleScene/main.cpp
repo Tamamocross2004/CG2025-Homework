@@ -60,6 +60,7 @@ bool isControllingLamp = false; // 是否正在控制台灯
 glm::vec3 tablePosition(0.0f, -3.0f, 0.0f); // 书桌位置（相对于sceneOrigin）
 glm::vec3 lampRelativePos(-1.0f, 5.22f, -0.5f); // 台灯相对于书桌的位置（x, y相对高度, z）- 原始y=-0.8，书桌y=-3.0，相对高度=2.2
 glm::vec3 sandboxRelativePos(0.5f, 4.62f, -1.0f); // 沙盘相对于书桌的位置（x, y相对高度, z）- 原始y=-1.4，书桌y=-3.0，相对高度=1.6
+float lampRotationY = 0.0f; // 台灯的Y轴旋转角度
 const float TABLE_SIZE_X = 2.0f; // 书桌X方向半尺寸（估算）
 const float TABLE_SIZE_Z = 2.0f; // 书桌Z方向半尺寸（估算）
 const float LAMP_MOVE_SCALE = 0.6f; // 台灯运动范围缩放因子（缩小到60%）
@@ -268,6 +269,13 @@ int main()
         lampGlowShader = new Shader("lamp_glow.vs", "lamp_glow.fs");
     } catch (...) {
         std::cout << "ERROR: Failed to load lamp glow shader!" << std::endl;
+    }
+    // 灵珠光晕着色器
+    Shader* orbGlowShader = nullptr;
+    try {
+        orbGlowShader = new Shader("orb_glow.vs", "orb_glow.fs");
+    } catch (...) {
+        std::cout << "ERROR: Failed to load orb glow shader!" << std::endl;
     }
 
     // --- 加载模型 ---
@@ -1084,6 +1092,72 @@ int main()
     glEnableVertexAttribArray(2);
     glBindVertexArray(0);
 
+    // --- 创建暗格空心盒子（从墙表面向外延伸） ---
+    // 暗格是一个空心盒子，前面（靠近房间内部）是旋转的砖墙正方形
+    // 砖墙正方形位置：brickSquarePos(3.94f, -2.20f, 2.2f)，大小：1.0（halfSize = 0.5f）
+    // 右墙内表面在x=3.95，暗格从x=3.94（砖墙正方形）向后延伸到x=3.96（墙内或更后）
+    // 暗格内部是空心的，只有5个面：后面、顶部、底部、左面、右面（缺少前面）
+    float secretRoomSize = 1.0f; // 暗格大小（与砖墙正方形相同）
+    float secretRoomHalfSize = secretRoomSize * 0.5f;
+    float secretRoomDepth = 0.2f; // 暗格深度（从墙表面向外延伸的距离）
+    float secretRoomVertices[] = {
+        // 位置(3) + 法线(3) + 纹理坐标(2) = 8个float
+        // 注意：顶点定义在局部坐标系中，X轴正向指向墙（远离房间）
+        // 前面（x=-depth/2）是砖墙正方形，不渲染
+        // 后面（x=+depth/2，最靠近墙的一面，法线指向+X方向）
+        secretRoomDepth * 0.5f, -secretRoomHalfSize, -secretRoomHalfSize,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
+        secretRoomDepth * 0.5f,  secretRoomHalfSize, -secretRoomHalfSize,  1.0f, 0.0f, 0.0f,  1.0f, 0.0f,
+        secretRoomDepth * 0.5f,  secretRoomHalfSize,  secretRoomHalfSize,  1.0f, 0.0f, 0.0f,  1.0f, 1.0f,
+        secretRoomDepth * 0.5f,  secretRoomHalfSize,  secretRoomHalfSize,  1.0f, 0.0f, 0.0f,  1.0f, 1.0f,
+        secretRoomDepth * 0.5f, -secretRoomHalfSize,  secretRoomHalfSize,  1.0f, 0.0f, 0.0f,  0.0f, 1.0f,
+        secretRoomDepth * 0.5f, -secretRoomHalfSize, -secretRoomHalfSize,  1.0f, 0.0f, 0.0f,  0.0f, 0.0f,
+        // 顶部（法线指向+Y方向）
+        -secretRoomDepth * 0.5f,  secretRoomHalfSize, -secretRoomHalfSize,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
+         secretRoomDepth * 0.5f,  secretRoomHalfSize, -secretRoomHalfSize,  0.0f, 1.0f, 0.0f,  1.0f, 0.0f,
+         secretRoomDepth * 0.5f,  secretRoomHalfSize,  secretRoomHalfSize,  0.0f, 1.0f, 0.0f,  1.0f, 1.0f,
+         secretRoomDepth * 0.5f,  secretRoomHalfSize,  secretRoomHalfSize,  0.0f, 1.0f, 0.0f,  1.0f, 1.0f,
+        -secretRoomDepth * 0.5f,  secretRoomHalfSize,  secretRoomHalfSize,  0.0f, 1.0f, 0.0f,  0.0f, 1.0f,
+        -secretRoomDepth * 0.5f,  secretRoomHalfSize, -secretRoomHalfSize,  0.0f, 1.0f, 0.0f,  0.0f, 0.0f,
+        // 底部（法线指向-Y方向）
+        -secretRoomDepth * 0.5f, -secretRoomHalfSize, -secretRoomHalfSize,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+         secretRoomDepth * 0.5f, -secretRoomHalfSize, -secretRoomHalfSize,  0.0f, -1.0f, 0.0f,  1.0f, 0.0f,
+         secretRoomDepth * 0.5f, -secretRoomHalfSize,  secretRoomHalfSize,  0.0f, -1.0f, 0.0f,  1.0f, 1.0f,
+         secretRoomDepth * 0.5f, -secretRoomHalfSize,  secretRoomHalfSize,  0.0f, -1.0f, 0.0f,  1.0f, 1.0f,
+        -secretRoomDepth * 0.5f, -secretRoomHalfSize,  secretRoomHalfSize,  0.0f, -1.0f, 0.0f,  0.0f, 1.0f,
+        -secretRoomDepth * 0.5f, -secretRoomHalfSize, -secretRoomHalfSize,  0.0f, -1.0f, 0.0f,  0.0f, 0.0f,
+        // 右面（法线指向+Z方向）
+        -secretRoomDepth * 0.5f, -secretRoomHalfSize,  secretRoomHalfSize,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
+         secretRoomDepth * 0.5f, -secretRoomHalfSize,  secretRoomHalfSize,  0.0f, 0.0f, 1.0f,  1.0f, 0.0f,
+         secretRoomDepth * 0.5f,  secretRoomHalfSize,  secretRoomHalfSize,  0.0f, 0.0f, 1.0f,  1.0f, 1.0f,
+         secretRoomDepth * 0.5f,  secretRoomHalfSize,  secretRoomHalfSize,  0.0f, 0.0f, 1.0f,  1.0f, 1.0f,
+        -secretRoomDepth * 0.5f,  secretRoomHalfSize,  secretRoomHalfSize,  0.0f, 0.0f, 1.0f,  0.0f, 1.0f,
+        -secretRoomDepth * 0.5f, -secretRoomHalfSize,  secretRoomHalfSize,  0.0f, 0.0f, 1.0f,  0.0f, 0.0f,
+        // 左面（法线指向-Z方向）
+        -secretRoomDepth * 0.5f, -secretRoomHalfSize, -secretRoomHalfSize,  0.0f, 0.0f, -1.0f,  0.0f, 0.0f,
+         secretRoomDepth * 0.5f, -secretRoomHalfSize, -secretRoomHalfSize,  0.0f, 0.0f, -1.0f,  1.0f, 0.0f,
+         secretRoomDepth * 0.5f,  secretRoomHalfSize, -secretRoomHalfSize,  0.0f, 0.0f, -1.0f,  1.0f, 1.0f,
+         secretRoomDepth * 0.5f,  secretRoomHalfSize, -secretRoomHalfSize,  0.0f, 0.0f, -1.0f,  1.0f, 1.0f,
+        -secretRoomDepth * 0.5f,  secretRoomHalfSize, -secretRoomHalfSize,  0.0f, 0.0f, -1.0f,  0.0f, 1.0f,
+        -secretRoomDepth * 0.5f, -secretRoomHalfSize, -secretRoomHalfSize,  0.0f, 0.0f, -1.0f,  0.0f, 0.0f
+    };
+    
+    unsigned int secretRoomVAO, secretRoomVBO;
+    glGenVertexArrays(1, &secretRoomVAO);
+    glGenBuffers(1, &secretRoomVBO);
+    glBindVertexArray(secretRoomVAO);
+    glBindBuffer(GL_ARRAY_BUFFER, secretRoomVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(secretRoomVertices), secretRoomVertices, GL_STATIC_DRAW);
+    // 位置属性
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    // 法线属性
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+    // 纹理坐标属性
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    glBindVertexArray(0);
+
     // --- 生成球体几何体（用于灵珠） ---
     std::vector<float> sphereVertices;
     std::vector<unsigned int> sphereIndices;
@@ -1838,6 +1912,48 @@ int main()
             glBindVertexArray(0);
         }
 
+        // --- 绘制暗格后面的正方体空间 ---
+        {
+            lightingShader.use();
+            lightingShader.setMat4("projection", projection);
+            lightingShader.setMat4("view", view);
+            lightingShader.setVec3("lightPos", lightPos);
+            lightingShader.setVec3("viewPos", camera.Position);
+            lightingShader.setVec3("lightColor", finalLightColor);
+            // 设置台灯点光源
+            glm::vec3 lampLightPos = lampModelWorldPos + glm::vec3(0.0f, 0.4f, 0.0f);
+            glm::vec3 lampColor(1.0f, 0.9f, 0.7f);
+            lightingShader.setBool("lampOn", lampOn);
+            lightingShader.setVec3("lampLight.position", lampLightPos);
+            lightingShader.setVec3("lampLight.color", lampColor);
+            lightingShader.setFloat("lampLight.intensity", lampOn ? 4.0f : 0.0f);
+            
+            lightingShader.setVec3("objectColor", 1.0f, 1.0f, 1.0f);
+            lightingShader.setBool("useTexture", true);
+            lightingShader.setBool("isFloor", false);
+            lightingShader.setBool("isHole", false);
+            lightingShader.setBool("isBrickSquare", false);
+            lightingShader.setBool("excludeBrickSquareRegion", false);
+
+            // 绑定砖墙纹理
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, brickTexture);
+            lightingShader.setInt("floorTexture", 0);
+
+            // 设置模型变换
+            // 暗格从墙表面向外延伸，前面是砖墙正方形（x=3.94），暗格中心在x=3.94+0.1=3.95，再往x轴正方向移动0.1
+            // 暗格的y和z与砖墙正方形对齐
+            glm::vec3 secretRoomPos(4.05f, -2.20f, 2.2f); // 暗格中心位置（与砖墙正方形y和z对齐）
+            model = glm::mat4(1.0f);
+            model = glm::translate(model, secretRoomPos);
+            lightingShader.setMat4("model", model);
+
+            // 渲染暗格空心盒子（5个面，每个面6个顶点，共30个顶点）
+            glBindVertexArray(secretRoomVAO);
+            glDrawArrays(GL_TRIANGLES, 0, 30);
+            glBindVertexArray(0);
+        }
+
         // --- 绘制箭头系统 ---
         if (arrowSystem) {
             arrowSystem->Draw(view, projection, lightPos, camera.Position, finalLightColor);
@@ -2000,6 +2116,7 @@ int main()
             model = glm::mat4(1.0f);
             // 使用在渲染循环开始处计算好的世界坐标
             model = glm::translate(model, lampModelWorldPos);
+            model = glm::rotate(model, glm::radians(lampRotationY), glm::vec3(0.0f, 1.0f, 0.0f)); // 应用Y轴旋转
             model = glm::scale(model, glm::vec3(0.3f)); // 调整台灯使尺寸合适
             modelShader.setMat4("model", model);
             lampModel.Draw(modelShader);
@@ -2022,13 +2139,13 @@ int main()
             // 设置光晕位置（台灯位置）
             glm::vec3 glowPos = lampModelWorldPos + glm::vec3(0.0f, 0.2f, 0.0f); // 稍微向上偏移
             lampGlowShader->setVec3("centerPos", glowPos);
-            lampGlowShader->setVec2("size", glm::vec2(0.6f, 0.8f)); // 光晕大小（调小）
+            lampGlowShader->setVec2("size", glm::vec2(0.8f, 0.8f)); // 光晕大小
             
             // 设置纹理和强度
             glActiveTexture(GL_TEXTURE0);
             glBindTexture(GL_TEXTURE_2D, lampGlowTexture);
             lampGlowShader->setInt("glowTexture", 0);
-            lampGlowShader->setFloat("glowIntensity", 1.5f);  // 光晕强度（可调整：1.0-3.0）
+            lampGlowShader->setFloat("glowIntensity", 2.0f);  // 光晕强度
             
             // 使用eVAO（四边形）渲染
             glBindVertexArray(eVAO);
@@ -2193,6 +2310,39 @@ int main()
             glBindVertexArray(sphereVAO);
             glDrawElements(GL_TRIANGLES, sphereIndexCount, GL_UNSIGNED_INT, 0);
             glBindVertexArray(0);
+            
+            // --- 绘制灵珠光晕（billboard效果） ---
+            if (orbGlowShader) {
+                // 启用混合以支持透明度
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+                // 禁用深度测试和深度写入，让光晕始终显示
+                glDisable(GL_DEPTH_TEST);
+                glDepthMask(GL_FALSE);
+                
+                orbGlowShader->use();
+                orbGlowShader->setMat4("projection", projection);
+                orbGlowShader->setMat4("view", view);
+                
+                // 设置光晕位置（灵珠位置）
+                glm::vec3 orbPos = glm::vec3(g_tileWorldCenterX, g_holeCenterY, g_tileWorldCenterZ);
+                orbGlowShader->setVec3("centerPos", orbPos);
+                orbGlowShader->setVec2("size", glm::vec2(0.8f, 0.8f)); // 光晕大小
+                
+                // 设置光晕强度和时间（用于动画效果）
+                orbGlowShader->setFloat("glowIntensity", 1.2f);
+                orbGlowShader->setFloat("time", currentFrame);
+                
+                // 使用eVAO（四边形）渲染
+                glBindVertexArray(eVAO);
+                glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+                glBindVertexArray(0);
+                
+                // 恢复状态
+                glEnable(GL_DEPTH_TEST);
+                glDepthMask(GL_TRUE);
+                glDisable(GL_BLEND);
+            }
         }
 
         // 绘制雨云 (如果可见) 
@@ -2708,6 +2858,7 @@ int main()
     if (billboardShader) delete billboardShader;
     if (orbShader) delete orbShader;
     if (lampGlowShader) delete lampGlowShader;
+    if (orbGlowShader) delete orbGlowShader;
     glDeleteVertexArrays(1, &sphereVAO);
     glDeleteBuffers(1, &sphereVBO);
     glDeleteBuffers(1, &sphereEBO);
@@ -2950,6 +3101,17 @@ void processInput(GLFWwindow* window)
             camera.ProcessKeyboard(LEFT, deltaTime);
         if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
             camera.ProcessKeyboard(RIGHT, deltaTime);
+        
+        // Q和R键控制台灯旋转（顺时针和逆时针）
+        float rotationSpeed = 90.0f * deltaTime; // 每秒90度
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS) {
+            // Q键：顺时针旋转（Y轴增加）
+            lampRotationY += rotationSpeed;
+        }
+        if (glfwGetKey(window, GLFW_KEY_R) == GLFW_PRESS) {
+            // R键：逆时针旋转（Y轴减少）
+            lampRotationY -= rotationSpeed;
+        }
     } else {
         // 正常模式：只移动相机
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
